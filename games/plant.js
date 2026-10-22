@@ -144,9 +144,11 @@
         get: (sim) => sim.state.weatherDays.length === 1 ? sim.state.weatherDays[0] : sim.state.weather, set: (sim, v) => { sim.state.weatherDays = [v]; } }
     ],
     missions, scene,
+    missionsIntro: "Each mission sets up a week of weather for the plant. Your rule cards do the work. Change rules any time, even mid-mission.",
+    soundState: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour; return { ambience: ["wind"], night: h < 5.5 || h > 19, rain: s.weather === "rainy" && h >= 10 && h < 16, devices: { pump: s.pumpOn } }; },
     status: (sim) => { const m = PlantModel.mood(sim.state); return { level: LEVEL[m.id], text: `${m.text} · health ${Math.round(sim.state.health)}% · ${PlantModel.leaves(sim.state)} leaves` }; },
     rulesIntro: "There are no rules yet, so nothing waters the plant. An IF rule keeps a device on while its condition is true.",
-    rulesTip: "Try: IF Soil moisture is below 40 THEN Pump ON. The pump stops by itself once the soil is moist again. Real controllers usually switch on at one level and off at a higher one, so the pump doesn't click on and off.",
+    rulesTip: "Try: IF Soil moisture is below 40 THEN Pump ON. The pump stops by itself once the soil is moist again. Add UNTIL 55 to water a little deeper each time: real controllers switch on at one level and off at another, so the pump doesn't keep clicking on and off.",
     codeIntro: "Your rule cards as an Arduino sketch for a self-watering pot. The read...() functions stand in for each sensor's real code, and the pins depend on your wiring.",
     codeSpec: {
       title: "Self-watering plant",

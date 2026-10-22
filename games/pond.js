@@ -163,9 +163,12 @@
       { type: "range", label: "Day's high", min: 12, max: 38, step: 1, unit: " °C", get: (sim) => sim.state.airHigh, set: (sim, v) => { sim.state.airHigh = v; } }
     ],
     missions, scene,
+    missionsIntro: "Each mission sets up the pond: the weather, the heat and the battery. Your rule cards do the work. Change rules any time, even mid-mission.",
+    eventSounds: { feeder: "plop" },
+    soundState: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour; return { ambience: ["water", "wind"], night: h < 5.5 || h > 19, rain: s.weather === "rainy", devices: { bubbles: s.aeratorOn } }; },
     status: (sim) => { const m = PondModel.mood(sim.state); return { level: LEVEL[m.id], text: `${m.text} · health ${Math.round(sim.state.health)}%` }; },
     rulesIntro: "This is how FLOATech's controller decides what to do. An IF rule keeps a device on while the condition is true. A time rule runs an action once a day.",
-    rulesTip: "Try: IF Oxygen is below 4 THEN Aerator ON. Watch the bubbles start at night and stop when the oxygen recovers. Real controllers usually switch on at one level and off at a higher one (on below 4, off above 5), so the pump doesn't click on and off.",
+    rulesTip: "Try: IF Oxygen is below 4 THEN Aerator ON UNTIL 5. Watch the bubbles start at night. UNTIL is optional: it keeps the aerator running until oxygen climbs back above 5, the way real controllers switch on at one level and off at another so a pump doesn't keep clicking on and off.",
     codeIntro: "Your rule cards written as an Arduino sketch, the kind of code that runs on FLOATech's controller. The read...() functions stand in for each sensor's real library code, and the pins depend on your wiring.",
     codeSpec: {
       title: "FLOATech pond controller",
