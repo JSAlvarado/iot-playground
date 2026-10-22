@@ -1,0 +1,1 @@
+TEST_RESULTS.map((r) => (r.ok ? "PASS  " : "FAIL  ") + r.name + (r.detail ? "  (" + r.detail + ")" : "")).join("\n") + "\n" + TEST_RESULTS.filter((r) => r.ok).length + " of " + TEST_RESULTS.length + " passed";
