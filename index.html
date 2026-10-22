@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>IoT Playground · Learn sensors and automation by playing</title>
+  <meta name="description" content="Browser games that teach how sensors, microcontrollers and automation work, no electronics experience needed.">
+  <meta name="theme-color" content="#f5f5f2">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <!-- ============ HEADER ============ -->
+    <header class="hub-head">
+      <div class="hub-mark"><img src="icon.svg" alt="" width="34" height="34"> IoT Playground</div>
+      <h1>Learn how smart devices think, by playing</h1>
+      <p>Pick a game. Each one has real sensors to watch, devices to switch and simple rule cards that make things
+        automatic. No electronics experience needed.</p>
+    </header>
+
+    <!-- ============ GAMES ============ -->
+    <section class="games" aria-label="Games">
+      <a class="game" href="pond.html">
+        <svg viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" fill="#bfe3f0"/><rect y="52" width="96" height="44" fill="#2e7f95"/><rect x="22" y="46" width="22" height="9" rx="4.5" fill="#e9e2cf"/><rect x="52" y="46" width="22" height="9" rx="4.5" fill="#e9e2cf"/><rect x="36" y="28" width="24" height="17" fill="#f4f4f0" stroke="#4b5156" stroke-width="2"/><path d="M33 28 L37 22 H59 L63 28 Z" fill="#23415a"/><path d="M20 72 q8 -5 16 0 q-8 5 -16 0 z M36 72 l6 -4 v8 z" fill="#9aa7ab"/><circle cx="70" cy="18" r="8" fill="#ffd25a"/></svg>
+        <div><h2>FLOATech Pond Simulator</h2><p>Keep a tilapia pond healthy with oxygen, temperature and pH sensors, a solar-powered aerator and an automatic feeder.</p><span class="tag">Play · 5 missions</span></div>
+      </a>
+      <a class="game" href="plant.html">
+        <svg viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" fill="#e6f3e2"/><path d="M48 66 V30" stroke="#3f7f3a" stroke-width="4"/><path d="M48 50 q-16 -12 -26 0 q12 8 26 0 z M48 40 q16 -12 26 0 q-12 8 -26 0 z" fill="#4f9a46"/><path d="M30 64 H66 L62 84 H34 Z" fill="#c4693d"/><circle cx="76" cy="18" r="8" fill="#ffd25a"/></svg>
+        <div><h2>Keep the Plant Alive</h2><p>A soil-moisture sensor, a little pump and a grow light. Keep a plant happy for a week. The easiest place to start.</p><span class="tag">Play · 4 missions</span></div>
+      </a>
+      <div class="game is-soon">
+        <svg viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" fill="#efe9e1"/><rect x="14" y="20" width="68" height="60" fill="#ffffff" stroke="#4b5156" stroke-width="2"/><rect x="22" y="28" width="22" height="18" fill="#bfe3f0"/><rect x="54" y="56" width="20" height="16" rx="3" fill="#c9d2d6"/><circle cx="64" cy="36" r="6" fill="#d64f4f"/></svg>
+        <div><h2>My Korean Room Monitor</h2><p>Temperature, humidity and fine dust (미세먼지) in a cozy room. Make the windows, heater and humidifier smart.</p><span class="tag">Coming soon</span></div>
+      </div>
+      <div class="game is-soon">
+        <svg viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" fill="#ece8f0"/><path d="M14 70 L32 52 L46 62 L64 30 L82 44" fill="none" stroke="#4b5156" stroke-width="3"/><circle cx="64" cy="30" r="10" fill="none" stroke="#d64f4f" stroke-width="3"/><path d="M71 37 L80 46" stroke="#d64f4f" stroke-width="3"/></svg>
+        <div><h2>Sensor Detective</h2><p>Mystery levels: read the sensor graphs, find what went wrong and choose the fix.</p><span class="tag">Coming soon</span></div>
+      </div>
+      <div class="game is-soon">
+        <svg viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" fill="#e4ecf2"/><rect x="14" y="30" width="68" height="40" rx="4" fill="#f4f4f0" stroke="#4b5156" stroke-width="2"/><rect x="24" y="40" width="20" height="20" fill="#23415a"/><circle cx="62" cy="50" r="7" fill="#ffd25a"/><path d="M44 50 H55" stroke="#d64f4f" stroke-width="3"/></svg>
+        <div><h2>Circuit Playground</h2><p>Drag a board, sensors, LEDs and a buzzer onto a breadboard, wire them up and test your first circuit.</p><span class="tag">Coming soon</span></div>
+      </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS ============ -->
+    <section class="how" aria-label="How the games work">
+      <div><h3>1. Watch the sensors</h3><p>Gauges show what each sensor measures right now, with the healthy range in green. Tap one to learn what it means.</p></div>
+      <div><h3>2. Write rule cards</h3><p>"IF oxygen is below 4 THEN aerator ON." Simple rules like these are how real controllers decide what to do.</p></div>
+      <div><h3>3. See the real code</h3><p>Every game turns your rules into Arduino code, so you can see how they would run on a real microcontroller.</p></div>
+    </section>
+
+    <p class="foot">Made by <a href="https://jsalvarado.github.io">Johnstheward S. Alvarado</a>. The simulations are simplified to run in a browser, but their healthy ranges follow published sources, listed in each game's Learn tab. Your stars are saved only on this device.</p>
+  </main>
+</body>
+</html>

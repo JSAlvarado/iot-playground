@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- IoT Playground mark: a microcontroller chip with a signal arc -->
+  <rect width="64" height="64" rx="14" fill="#0a6e8c"/>
+  <rect x="18" y="22" width="28" height="28" rx="4" fill="#ffffff"/>
+  <g stroke="#ffffff" stroke-width="3" stroke-linecap="round">
+    <path d="M24 50v6M32 50v6M40 50v6M12 30h6M12 40h6M46 30h6M46 40h6"/>
+  </g>
+  <circle cx="32" cy="36" r="5" fill="#0a6e8c"/>
+  <path d="M24 15a12 12 0 0 1 16 0M19 10a19 19 0 0 1 26 0" fill="none" stroke="#ffd25a" stroke-width="3" stroke-linecap="round"/>
+</svg>

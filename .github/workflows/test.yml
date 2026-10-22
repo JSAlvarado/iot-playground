@@ -1,0 +1,23 @@
+# Runs the science and engine tests (tests/tests.js) on every push and pull request.
+# A red X on a commit means a change broke one of the facts the games depend on.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run the tests
+        run: node tests/run-node.js
