@@ -25,15 +25,22 @@
 
   // ---- Rule cards ----
   // { kind: "if", sensor, op: "<" | ">", value, actuator }  → the actuator is ON while the condition is true
+  //   with until: n, it stays ON until the reading passes n the other way (hysteresis: on below 4, off above 5)
   // { kind: "at", time: "07:00", actuator }                  → a one-time action at that time every day
-  function evaluateRules(rules, readings, minutes) {
+  const hasUntil = (r) => typeof r.until === "number" && Number.isFinite(r.until);
+  function evaluateRules(rules, readings, minutes, latch = new WeakMap()) {
     const on = {}, events = [];
     const now = ((minutes % 1440) + 1440) % 1440;
     for (const r of rules) {
       if (r.kind === "if") {
         const v = readings[r.sensor];
         if (typeof v !== "number") continue;
-        const hit = r.op === "<" ? v < r.value : v > r.value;
+        let hit = r.op === "<" ? v < r.value : v > r.value;
+        if (hasUntil(r)) {
+          if (hit) latch.set(r, true);
+          else if (r.op === "<" ? v > r.until : v < r.until) latch.set(r, false);
+          hit = !!latch.get(r);
+        }
         on[r.actuator] = on[r.actuator] || hit;
       } else if (r.kind === "at" && parseTime(r.time) === now) {
         events.push(r.actuator);
@@ -51,6 +58,7 @@
       minutes: options.startMinutes ?? 6 * 60,
       state: model.init(options),
       rules: [],
+      latch: new WeakMap(), // which "until" rules are holding their device on
       manual: {},          // actuator id → "auto" | "on" | "off" (switches only)
       history: [],         // one sample every 10 virtual minutes: { minutes, ...readings }
       log: [],             // what happened, newest last
@@ -58,7 +66,7 @@
       trigger(id) { sim.pending.push(id); },
       tick() {
         const readings = model.readings(sim.state);
-        const { on, events } = evaluateRules(sim.rules, readings, sim.minutes);
+        const { on, events } = evaluateRules(sim.rules, readings, sim.minutes, sim.latch);
         events.push(...sim.pending.splice(0));
         const switches = {};
         for (const [id, a] of Object.entries(model.actuators)) {
@@ -86,42 +94,62 @@
   };
 
   // ---- "See the real code": the rule cards as an Arduino sketch ----
-  // spec: { title, sensors: { id: { fn, unit, label } }, actuators: { id: { pin, label, kind } } }
+  // spec: { title, sensors: { id: { fn, unit, label } }, actuators: { id: { pin, label, kind, pulseMs } } }
+  // An event with drives + durationMin (like "air out for 10 minutes") holds that switch on with a timer instead.
   function arduinoCode(rules, spec) {
     const usesTime = rules.some((r) => r.kind === "at");
+    const acts = Object.entries(spec.actuators);
+    const timed = acts.filter(([, a]) => a.kind === "event" && a.drives);
+    const pinName = (id) => id.toUpperCase() + "_PIN";
     const lines = [];
     lines.push(`// ${spec.title}: generated from your rule cards in IoT Playground`);
     lines.push(`// The read...() functions stand for your real sensor code (each sensor's library has its own).`);
     if (usesTime) lines.push(`#include <RTClib.h>   // a real-time clock module (DS3231) keeps the time`);
     lines.push("");
-    for (const [id, a] of Object.entries(spec.actuators)) lines.push(`const int ${id.toUpperCase()}_PIN = ${a.pin};   // ${a.label}`);
+    for (const [id, a] of acts) if (!a.drives) lines.push(`const int ${pinName(id)} = ${a.pin};   // ${a.label}`);
     if (usesTime) lines.push("RTC_DS3231 rtc;", "int lastMinuteRun = -1;");
+    for (const [id, a] of timed) lines.push(`unsigned long ${id}Until = 0;   // ${a.label}: when the timer ends`);
+    const ifRules = rules.filter((r) => r.kind === "if");
+    const latched = ifRules.filter(hasUntil);
+    latched.forEach((r, i) => lines.push(`bool ${r.actuator}Hold${i + 1} = false;   // rule ${i + 1} keeps the ${r.actuator} on until ${r.sensor} ${r.op === "<" ? ">" : "<"} ${r.until}`));
     lines.push("");
-    for (const [id, s] of Object.entries(spec.sensors)) lines.push(`float ${s.fn}();   // ${s.label}, in ${s.unit}`);
+    for (const [, s] of Object.entries(spec.sensors)) lines.push(`float ${s.fn}();   // ${s.label}, in ${s.unit}`);
     lines.push("", "void setup() {", "  Serial.begin(115200);");
-    for (const id of Object.keys(spec.actuators)) lines.push(`  pinMode(${id.toUpperCase()}_PIN, OUTPUT);`);
+    for (const [id, a] of acts) if (!a.drives) lines.push(`  pinMode(${pinName(id)}, OUTPUT);`);
     if (usesTime) lines.push("  rtc.begin();");
     lines.push("}", "", "void loop() {");
     for (const [id, s] of Object.entries(spec.sensors)) lines.push(`  float ${id} = ${s.fn}();`);
-    const ifRules = rules.filter((r) => r.kind === "if");
-    const byActuator = {};
-    for (const r of ifRules) (byActuator[r.actuator] = byActuator[r.actuator] || []).push(`${r.sensor} ${r.op} ${r.value}`);
-    for (const [id, a] of Object.entries(spec.actuators)) {
-      if (a.kind !== "switch") continue;
-      const conds = byActuator[id];
-      lines.push("", `  // ${a.label}: ON while ${conds ? conds.join(" or ") : "no rule says so"}`);
-      lines.push(`  digitalWrite(${id.toUpperCase()}_PIN, ${conds ? "(" + conds.join(" || ") + ")" : "false"} ? HIGH : LOW);`);
-    }
     const atRules = rules.filter((r) => r.kind === "at");
     if (atRules.length) {
       lines.push("", "  DateTime now = rtc.now();", "  int minuteOfDay = now.hour() * 60 + now.minute();", "  if (minuteOfDay != lastMinuteRun) {", "    lastMinuteRun = minuteOfDay;");
       for (const r of atRules) {
         const a = spec.actuators[r.actuator];
-        lines.push(`    if (minuteOfDay == ${parseTime(r.time)}) {   // ${r.time}: ${a.label}`,
-          `      digitalWrite(${r.actuator.toUpperCase()}_PIN, HIGH);`, `      delay(${a.pulseMs || 3000});   // run it for a moment`,
-          `      digitalWrite(${r.actuator.toUpperCase()}_PIN, LOW);`, "    }");
+        if (a.drives) {
+          lines.push(`    if (minuteOfDay == ${parseTime(r.time)}) {   // ${r.time}: ${a.label}`,
+            `      ${r.actuator}Until = millis() + ${a.durationMin}UL * 60UL * 1000UL;`, "    }");
+        } else {
+          lines.push(`    if (minuteOfDay == ${parseTime(r.time)}) {   // ${r.time}: ${a.label}`,
+            `      digitalWrite(${pinName(r.actuator)}, HIGH);`, `      delay(${a.pulseMs || 3000});   // run it for a moment`,
+            `      digitalWrite(${pinName(r.actuator)}, LOW);`, "    }");
+        }
       }
       lines.push("  }");
+    }
+    if (latched.length) {
+      lines.push("", "  // Hysteresis: switch on at one level, off at another, so devices don't click on and off");
+      latched.forEach((r, i) => {
+        const v = `${r.actuator}Hold${i + 1}`;
+        lines.push(`  if (${r.sensor} ${r.op} ${r.value}) ${v} = true;`, `  else if (${r.sensor} ${r.op === "<" ? ">" : "<"} ${r.until}) ${v} = false;`);
+      });
+    }
+    const byActuator = {};
+    ifRules.forEach((r) => { (byActuator[r.actuator] = byActuator[r.actuator] || []).push(hasUntil(r) ? `${r.actuator}Hold${latched.indexOf(r) + 1}` : `${r.sensor} ${r.op} ${r.value}`); });
+    for (const [id, a] of acts) {
+      if (a.kind !== "switch") continue;
+      const conds = (byActuator[id] || []).slice();
+      for (const [eid, e] of timed) if (e.drives === id) conds.push(`(long)(${eid}Until - millis()) > 0`);
+      lines.push("", `  // ${a.label}: ON while ${conds.length ? conds.join(" or ") : "no rule says so"}`);
+      lines.push(`  digitalWrite(${pinName(id)}, ${conds.length ? "(" + conds.join(" || ") + ")" : "false"} ? HIGH : LOW);`);
     }
     lines.push("", "  delay(1000);   // check again every second", "}");
     return lines.join("\n");
