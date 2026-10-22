@@ -4,6 +4,7 @@
 (function (root) {
   "use strict";
   const { IoT } = root;
+  const SND = root.IoTSound || { init() {}, fx() {}, update() {}, button: () => null }; // sound is optional
   const el = (tag, props = {}, ...kids) => {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(props)) {
@@ -27,6 +28,7 @@
 
   function start(game) {
     document.body.dataset.game = game.id;
+    SND.init({ theme: game.id });
     const KEY = "iotpg:" + game.id;
     const saved = IoT.store.get(KEY, {});
     let rules = Array.isArray(saved.rules) ? saved.rules : JSON.parse(JSON.stringify(game.defaultRules));
@@ -48,7 +50,7 @@
       SPEEDS.map((s) => el("button", { type: "button", "aria-label": s.aria, "aria-pressed": String(s === speed), text: s.label,
         onclick: () => setSpeed(s) })));
     const bar = el("header", { class: "bar" },
-      el("a", { class: "btn back", href: "./", "aria-label": "Back to all games" }, "←", el("span", { class: "wide-only", text: " Games" })), el("h1", { text: game.short || game.title, title: game.title }), clock, speedBox);
+      el("a", { class: "btn back", href: "./", "aria-label": "Back to all games" }, "←", el("span", { class: "wide-only", text: " Games" })), el("h1", { text: game.short || game.title, title: game.title }), clock, SND.button(), speedBox);
     const sceneBox = el("div", { class: "scene", role: "img", "aria-label": game.sceneLabel });
     const sceneClock = el("span", { class: "scene-clock", "aria-hidden": "true" }); // the clock over the scene, on phones
     const statusDot = el("span", { class: "dot" });
@@ -124,7 +126,7 @@
       if (!rules.length) ruleList.append(el("p", { class: "hint", text: "No rules yet: nothing happens automatically. Add one below." }));
       rules.forEach((r, i) => {
         const changed = () => { save(); renderCode(); };
-        const del = el("button", { type: "button", class: "del", "aria-label": "Delete this rule", text: "×", onclick: () => { rules.splice(i, 1); save(); renderRules(); renderCode(); } });
+        const del = el("button", { type: "button", class: "del", "aria-label": "Delete this rule", text: "×", onclick: () => { rules.splice(i, 1); SND.fx("remove"); save(); renderRules(); renderCode(); } });
         if (r.kind === "if") {
           const sSel = el("select", { "aria-label": "Sensor", onchange: (e) => { r.sensor = e.target.value; unit.textContent = sensorById[r.sensor].unit; changed(); } },
             game.ruleSensors.map((id) => el("option", { value: id, text: sensorById[id].label, selected: id === r.sensor })));
@@ -135,8 +137,11 @@
           const unit = el("span", { class: "muted", text: sensorById[r.sensor].unit });
           const aSel = el("select", { "aria-label": "Device", onchange: (e) => { r.actuator = e.target.value; changed(); } },
             game.ruleSwitches.map((id) => el("option", { value: id, text: actName(id), selected: id === r.actuator })));
+          // Optional "until": keep the device on until the reading passes this level the other way (hysteresis)
+          const until = el("input", { type: "number", step: "0.1", value: typeof r.until === "number" ? r.until : "", placeholder: "optional", "aria-label": "Stay on until this value (optional)",
+            oninput: (e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) r.until = v; else delete r.until; changed(); } });
           ruleList.append(el("div", { class: "rule" }, el("span", { class: "kw", text: "IF" }), sSel, opSel, num, unit,
-            el("span", { class: "kw", text: "THEN" }), aSel, el("span", { text: "ON" }), del));
+            el("span", { class: "kw", text: "THEN" }), aSel, el("span", { text: "ON" }), el("span", { class: "kw", text: "UNTIL" }), until, del));
         } else {
           const t = el("input", { type: "time", value: r.time, "aria-label": "Time", oninput: (e) => { if (e.target.value) { r.time = e.target.value; changed(); } } });
           const aSel = el("select", { "aria-label": "Action", onchange: (e) => { r.actuator = e.target.value; changed(); } },
@@ -146,9 +151,9 @@
       });
     }
     const addIf = el("button", { type: "button", class: "btn", text: "+ IF rule",
-      onclick: () => { rules.push({ kind: "if", sensor: game.ruleSensors[0], op: "<", value: sensorById[game.ruleSensors[0]].good[0], actuator: game.ruleSwitches[0] }); save(); renderRules(); renderCode(); } });
+      onclick: () => { rules.push({ kind: "if", sensor: game.ruleSensors[0], op: "<", value: sensorById[game.ruleSensors[0]].good[0], actuator: game.ruleSwitches[0] }); SND.fx("pop"); save(); renderRules(); renderCode(); } });
     const addAt = game.ruleEvents.length ? el("button", { type: "button", class: "btn", text: "+ Time rule",
-      onclick: () => { rules.push({ kind: "at", time: "12:00", actuator: game.ruleEvents[0] }); save(); renderRules(); renderCode(); } }) : null;
+      onclick: () => { rules.push({ kind: "at", time: "12:00", actuator: game.ruleEvents[0] }); SND.fx("pop"); save(); renderRules(); renderCode(); } }) : null;
     const resetRules = el("button", { type: "button", class: "btn", text: "Reset to examples",
       onclick: () => { rules.splice(0, rules.length, ...JSON.parse(JSON.stringify(game.defaultRules))); save(); renderRules(); renderCode(); } });
     panels.rules.append(el("h2", { text: "Rule cards: the controller's brain" }), el("p", { text: game.rulesIntro }),
@@ -168,10 +173,11 @@
       mission = { def: m, start: sim.minutes };
       banner.hidden = false; banner.dataset.kind = "run";
       syncEnv(); renderMissions(); setSpeed(SPEEDS[2]);
+      SND.fx("start");
     }
     const freePlay = el("button", { type: "button", class: "btn", text: "Free play (no mission)",
       onclick: () => { mission = null; banner.hidden = true; newSim(); syncEnv(); renderMissions(); } });
-    panels.missions.append(el("h2", { text: "Missions" }), el("p", { text: "Each mission sets up the pond or garden; your rule cards do the work. Change rules any time, even mid-mission." }),
+    panels.missions.append(el("h2", { text: "Missions" }), el("p", { text: game.missionsIntro || "Each mission sets up the world; your rule cards do the work. Change rules any time, even mid-mission." }),
       banner, missionList, el("div", { class: "add" }, freePlay));
 
     // Graph
@@ -181,7 +187,7 @@
     function renderGraph() {
       const s = sensorById[graphSel.value];
       const pts = sim.history.slice(-144);
-      const W = 600, H = 200, L = 36, B = 22;
+      const W = 600, H = 200, L = 44, B = 24;
       const x = (i) => L + (i / Math.max(1, pts.length - 1)) * (W - L - 8);
       const y = (v) => 8 + (1 - (v - s.min) / (s.max - s.min)) * (H - B - 8);
       const ns = "http://www.w3.org/2000/svg";
@@ -230,21 +236,24 @@
 
     // ---- Running ----
     function setSpeed(s) { speed = s; speedBox.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-pressed", String(SPEEDS[i] === s))); }
-    let last = performance.now(), carry = 0, lastUi = 0, lastGraph = 0;
+    let last = performance.now(), carry = 0, lastUi = 0, lastGraph = 0, lastAlert = 0;
+    const now = () => performance.now();
     function frame(now) {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       carry += speed.rate * dt;
       let n = Math.floor(carry);
       carry -= n;
+      const heard = new Set();
       while (n-- > 0) {
-        sim.tick();
+        for (const ev of sim.tick().events) heard.add(ev);
         if (mission) {
           const r = mission.def.check(sim, (sim.minutes - mission.start) / 60);
           mission.result = r;
           if (r.state !== "running") { finishMission(r); break; }
         }
       }
+      for (const ev of heard) SND.fx((game.eventSounds && game.eventSounds[ev]) || "pop");
       game.scene.draw(sim, now);
       if (now - lastUi > 200) { updateUi(); lastUi = now; }
       if (tab === "graph" && now - lastGraph > 1000) { renderGraph(); lastGraph = now; }
@@ -254,6 +263,7 @@
       setSpeed(SPEEDS[0]);
       banner.dataset.kind = r.state;
       if (r.state === "won") { stars[mission.def.id] = Math.max(stars[mission.def.id] || 0, r.stars || 1); save(); }
+      SND.fx(r.state === "won" ? "win" : "lose", r.stars || 1);
       banner.replaceChildren(document.createTextNode(r.message));
       mission = { ...mission, done: true };
       renderMissions();
@@ -266,11 +276,14 @@
       for (const g of gaugeEls) {
         const v = readings[g.s.id];
         const lv = level(g.s, v);
+        if (lv === "bad" && g.last && g.last !== "bad" && speed.rate && now() - lastAlert > 4000) { SND.fx("alert"); lastAlert = now(); }
+        g.last = lv;
         g.box.dataset.level = lv === "good" ? "" : lv;
         g.pill.textContent = LEVEL_TEXT[lv];
         g.value.replaceChildren(document.createTextNode(v.toFixed(g.s.decimals)), el("small", { text: g.s.unit }));
         g.fill.style.left = IoT.clamp((v - g.s.min) / (g.s.max - g.s.min) * 100, 0, 99.5) + "%";
       }
+      if (game.soundState) SND.update(game.soundState(sim));
       const st = game.status(sim);
       status.dataset.level = st.level;
       statusText.textContent = st.text;
