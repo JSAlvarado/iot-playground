@@ -17,9 +17,32 @@ Arduino code**. Built by Johnstheward S. Alvarado.
 | **Sensor Detective** | Ten mystery cases made from the other games' simulations: an oxygen crash, a drained battery, a −127 °C reading, a stuck sensor, a stuffy room and more. Read the graph, ask for a clue, pick the cause. | Playable |
 | **Circuit Playground** | Tap-to-wire an Uno-style board: blink an LED through a 220 Ω resistor, read a button with INPUT_PULLUP, build an LDR night light, a TMP36 heat alarm and a traffic light. It catches missing resistors, backwards LEDs and short circuits, and shows the Arduino sketch for your wiring. 5 challenges. | Playable |
 
-The three simulation games share the same tabs: **Rules** (rule cards, with an optional UNTIL level for
-hysteresis), **Missions** (goals with stars), **Graph** (the last day of readings), **Code** (your rules as an
-Arduino sketch) and **Learn** (what each sensor measures, with sources). Every game has **sound**: effects, ambience
+### From student design projects
+
+Six more games are based on engineering design projects by students at Holy Cross of Davao College. They are
+proposed designs, so each game simulates how its system is meant to work. Each Learn tab separates numbers **from the
+design** from **game values** taken from published sources, and credits the project and school (no personal names).
+
+| Game | Based on | What you learn |
+|---|---|---|
+| **Tuba Master** | AuTuba (solar coconut-wine fermentation) | Sweet sap turns into tuba as pH falls and alcohol rises; pump it out before it sours, and keep the solar battery alive. |
+| **Copra Power** | CopraWatt (biomass generator and copra dryer) | Hold a copra dryer at 50–70 °C, dry copra to the grading targets, keep carbon monoxide low, and charge a battery from steam and sun. |
+| **UV Tomato Guard** | TOMATRIX (UV-C tomato chamber) | Gas sensors decide when to run a fixed 3-minute UV-C cycle; the lid interlock keeps it safe; keep temperature and humidity in band. |
+| **Seedling Chamber** | SeedSpark (solar seedling microclimate chamber) | Water by soil moisture, vent a hot chamber and keep damp nights from rotting tomato and eggplant seedlings. |
+| **Cold Cart** | SPARC (solar thermoelectric cold box) | Keep a vendor's fish at 4 °C or colder; a Peltier needs its hot side cooled, and the battery has to last the market day. |
+| **Curb-E Smart Sign Patrol** | Curb-E (AI no-parking smart sign) | Thresholds and false alarms: catch parked cars without flagging brief stops, and upload evidence only when the plate read is clear. |
+
+The simulation games share the same tabs: **Rules** (rule cards, with an optional UNTIL level for
+hysteresis, and IF rules that can START a timed action such as a UV-C cycle), **Missions** (goals with stars),
+**Graph** (the last day of readings), **Code** (your rules as an Arduino sketch), **Learn** (what each sensor
+measures, with sources) and **World** (free-play settings and a log of what happened). On a phone the whole game
+fits on one screen with no page scrolling: the scene, a row of gauges, a row of controls and the tabs, whose panel
+scrolls inside itself. A **?** button explains how to play.
+
+**Weather you can see and hear.** Outdoor games draw their weather over the scene (slanted rain with splashes and
+lightning, drifting cloud shadows, warm sunlight with turning rays, stars on clear nights), and each weather has its
+own sound bed: rain with drops and distant thunder, gusty wind under clouds, birds, a breeze and afternoon cicadas in
+the sun, crickets and frogs at night. Weather buttons (☀️ ☁️ 🌧️) sit on the scene in free play. Every game has **sound**: effects, ambience
 for its world and soft generative music, all synthesised in the browser with the Web Audio API (no audio files), with
 a speaker button to turn effects or music off.
 
@@ -48,7 +71,7 @@ published sources, listed in each game's Learn tab:
 - **One shared engine** (`engine.js`) runs every game: a simulation clock (one tick is one virtual minute), rule
   cards, missions and the Arduino code generator. Each game adds a **model** (`models/`) with its science and a
   **game file** (`games/`) with its sensors, missions and an original SVG scene. The screen is shared (`ui.js`).
-- **Tested automatically:** `tests/tests.js` checks 63 facts the games depend on, from oxygen saturation values
+- **Tested automatically:** `tests/tests.js` and one `tests/game-<id>.js` per newer game check 213 facts the games depend on, from oxygen saturation values
   to "an aerator left on all the time empties the solar battery", "every Detective graph shows what its answer
   says" and "an LED with no resistor burns". GitHub Actions runs them on every push
   (`.github/workflows/test.yml`); every mission was also played through with good and bad rule sets so each one is
@@ -61,12 +84,14 @@ published sources, listed in each game's Learn tab:
 | `index.html` | The game picker |
 | `engine.js` | Clock, rule cards, simulation loop, Arduino code generator, oxygen saturation |
 | `ui.js`, `style.css` | The shared game screen: gauges, controls, tabs, missions, graph, code, learn |
-| `sound.js` | Effects, ambience and music, synthesised with the Web Audio API |
+| `sound.js` | Effects, ambience, weather sounds and music, synthesised with the Web Audio API |
+| `weather.js` | The rain, cloud and sunshine layer drawn over outdoor scenes |
 | `models/pond.js`, `models/plant.js`, `models/room.js` | The science of each world |
 | `models/cases.js`, `detective.js`, `detective.html` | Sensor Detective: the cases (built from the models) and the screen |
 | `models/circuit.js`, `circuit.js`, `circuit.html` | Circuit Playground: the wiring rules and the board |
 | `games/*.js`, `pond.html`, `plant.html`, `room.html` | Each simulation game's sensors, missions and scene |
-| `tests/` | The automated tests (`node tests/run-node.js`) |
+| `models/<id>.js`, `games/<id>.js`, `<id>.html` | The six design-project games: tuba, copra, tomato, seedling, coldbox, curbe |
+| `tests/` | The automated tests (`node tests/run-node.js`); `game-<id>.js` holds each newer game's checks |
 
 ## Sources
 

@@ -6,6 +6,9 @@
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail: detail ?? "" });
   const near = (a, b, tol) => Math.abs(a - b) <= tol;
+  // Each newer game adds its own checks in tests/game-<id>.js, loaded after this file, through IoTTest
+  root.IoTTest = { check, near, results };
+  root.TEST_RESULTS = results;
   const { IoT, PondModel, PlantModel } = root;
 
   // ---- Science helpers ----
@@ -137,6 +140,17 @@
   check("Generated code writes the UNTIL rule as hysteresis", code2.includes("if (oxygen < 4) aeratorHold1 = true;") && code2.includes("else if (oxygen > 5) aeratorHold1 = false;"));
   const code3 = IoT.arduinoCode([{ kind: "at", time: "12:00", actuator: "vent" }], { title: "T", sensors: {}, actuators: { window: { pin: 8, label: "Window", kind: "switch" }, vent: { label: "Air out", kind: "event", drives: "window", durationMin: 10 } } });
   check("A 10-minute airing uses a timer, not a 10-minute delay()", code3.includes("ventUntil = millis() + 10UL * 60UL * 1000UL;") && !code3.includes("delay(600000)"));
+
+  // ---- IF rules that START an action (like a timed UV cycle) fire once each time they turn true ----
+  const pulseModel = { actuators: { uv: { kind: "event" } }, init: () => ({ gas: 0, starts: 0 }), readings: (s) => ({ gas: s.gas }),
+    step(s, ctx) { s.starts += ctx.events.filter((e) => e === "uv").length; } };
+  const ps = IoT.createSim(pulseModel); ps.rules = [{ kind: "if", sensor: "gas", op: ">", value: 5, actuator: "uv" }];
+  ps.state.gas = 9; ps.run(30); ps.state.gas = 1; ps.run(5); ps.state.gas = 9; ps.run(5);
+  check("An IF rule starts an action once per time it turns true, not every minute", ps.state.starts === 2, ps.state.starts);
+  const code4 = IoT.arduinoCode([{ kind: "if", sensor: "gas", op: ">", value: 400, actuator: "uv" }],
+    { title: "T", sensors: { gas: { fn: "readGas", unit: "ppm", label: "Gas" } },
+      actuators: { lamp: { pin: 7, label: "UV lamp", kind: "switch", onlyIf: "lidClosed()" }, uv: { label: "UV cycle", kind: "event", drives: "lamp", durationMs: 182000 } } });
+  check("Arduino code starts a timed cycle on the rising edge and guards the lamp", /uvNow && !uvWasTrue/.test(code4) && /182000UL/.test(code4) && /&& lidClosed\(\)/.test(code4));
 
   root.TEST_RESULTS = results;
 })(typeof window !== "undefined" ? window : globalThis);

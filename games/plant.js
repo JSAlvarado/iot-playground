@@ -95,6 +95,7 @@
       const t = (hour - 6) / 12, up = hour >= 6 && hour <= 18;
       sun.setAttribute("cx", up ? 80 + 640 * t : 700); sun.setAttribute("cy", up ? 260 - Math.sin(Math.PI * t) * 210 : 70);
       sun.setAttribute("fill", up ? "#ffd25a" : "#e8ecf2");
+      sun.setAttribute("opacity", up ? (s.weather === "rainy" ? 0 : s.weather === "cloudy" ? 0.45 : 1) : 1); // the sun hides behind rain clouds
       cloudG.setAttribute("opacity", s.weather === "sunny" ? "0" : "0.95");
       const raining = s.weather === "rainy" && hour >= 10 && hour < 16;
       rainG.setAttribute("opacity", raining ? "1" : "0");
@@ -128,11 +129,11 @@
     id: "plant", title: "Keep the Plant Alive", short: "Plant Alive", model: PlantModel, options: { weatherDays: ["sunny"] },
     sceneLabel: "A potted plant on a balcony with a water tank, a small pump and a grow light",
     sensors: [
-      { id: "moisture", label: "Soil moisture", unit: "%", decimals: 0, min: 0, max: 100, good: [40, 70], warn: [25, 85],
+      { id: "moisture", label: "Soil moisture", short: "Soil", icon: "💧", unit: "%", decimals: 0, min: 0, max: 100, good: [40, 70], warn: [25, 85],
         learn: { title: "Soil moisture (%)", text: "A capacitive soil-moisture sensor is a stick you push into the soil; it measures how much water is around it. It gives a raw number, which you turn into a 0–100% scale by recording it in dry soil and in wet soil. This game uses a simple 0–100% scale where 40–70% is comfortable for this plant (real plants differ). Too dry and the leaves droop. Too wet for too long and the roots can't get air: waterlogged soil pushes out the oxygen roots need, and root rot can follow. Overwatering often looks like thirst, so check the soil before adding more water." } },
-      { id: "light", label: "Light", unit: "%", decimals: 0, min: 0, max: 100, good: [20, 100], warn: [5, 20],
+      { id: "light", label: "Light", icon: "☀️", unit: "%", decimals: 0, min: 0, max: 100, good: [20, 100], warn: [5, 20],
         learn: { title: "Light (% of full sun)", text: "A light sensor (for example a BH1750, which measures lux) tells the controller how bright it is. Plants use the energy in light to make their food (photosynthesis), so they only grow when there's enough of it. Clouds and rain cut the light a lot. A grow light can make up for dark days, which is how indoor farms grow plants all year." } },
-      { id: "tank", label: "Water tank", unit: "L", decimals: 1, min: 0, max: 10, good: [2, 10], warn: [0.5, 2],
+      { id: "tank", label: "Water tank", short: "Tank", icon: "🪣", unit: "L", decimals: 1, min: 0, max: 10, good: [2, 10], warn: [0.5, 2],
         learn: { title: "Water tank (litres)", text: "The pump moves water from a small tank to the pot. In a real system a float switch or a level sensor tells the controller when the tank is getting low, so the pump never runs dry (running dry can damage a pump)." } }
     ],
     switches: [{ id: "pump", label: "Pump" }, { id: "growlight", label: "Grow light" }],
@@ -145,6 +146,8 @@
     ],
     missions, scene,
     missionsIntro: "Each mission sets up a week of weather for the plant. Your rule cards do the work. Change rules any time, even mid-mission.",
+    // Rainy days rain from 10:00 to 16:00 (as in the model); the rest of a rainy day is overcast
+    weather: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour; return { sky: s.weather === "rainy" && !(h >= 10 && h < 16) ? "cloudy" : s.weather, night: h < 5.5 || h > 18.75 }; },
     soundState: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour; return { ambience: ["wind"], night: h < 5.5 || h > 19, rain: s.weather === "rainy" && h >= 10 && h < 16, devices: { pump: s.pumpOn } }; },
     status: (sim) => { const m = PlantModel.mood(sim.state); return { level: LEVEL[m.id], text: `${m.text} · health ${Math.round(sim.state.health)}% · ${PlantModel.leaves(sim.state)} leaves` }; },
     rulesIntro: "There are no rules yet, so nothing waters the plant. An IF rule keeps a device on while its condition is true.",

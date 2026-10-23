@@ -1,6 +1,13 @@
 // ============ IOT PLAYGROUND UI: the game screen every game shares ============
 // A game describes itself (sensors, actuators, rule choices, missions, scene) and IoTUI.start(game) builds the
-// screen: clock and speed, the scene, gauges, manual controls, and tabs for Rules, Missions, Graph, Code and Learn.
+// screen. On phones everything fits on one screen with no page scrolling: the scene (with the clock, weather
+// buttons and status on top of it), a row of gauges, a row of controls, and a tab area that fills the rest and
+// scrolls inside itself. Tabs: Rules, Missions, Graph, Code, Learn and World.
+//
+// Optional game fields: accent: [color, softColor], music: { bpm, wave, chords, scale } (see sound.js),
+// weather(sim) → { sky: "sunny" | "cloudy" | "rainy", night, rain: 0–1 } for the weather layer and its sounds,
+// sensors[].icon (an emoji shown on the gauge), howTo: [3–4 short steps], credit: { text, url? } and
+// ruleIfEvents: [event ids an IF rule may start, like a UV cycle].
 (function (root) {
   "use strict";
   const { IoT } = root;
@@ -13,11 +20,18 @@
       else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
       else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? "" : v);
     }
-    for (const kid of kids.flat()) if (kid !== null && kid !== undefined) n.append(kid);
+    for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined) n.append(kid);
     return n;
   };
   const SPEEDS = [{ id: "pause", label: "❚❚", aria: "Pause", rate: 0 }, { id: "slow", label: "1×", aria: "Slow: 5 minutes per second", rate: 5 },
     { id: "normal", label: "6×", aria: "Normal: 30 minutes per second", rate: 30 }, { id: "fast", label: "36×", aria: "Fast: 3 hours per second", rate: 180 }];
+  const WEATHER_ICON = { sunny: "☀️", cloudy: "☁️", rainy: "🌧️" };
+  const HOW_TO = [
+    "Watch the gauges. Green means healthy; tap one to learn what it measures.",
+    "Switch devices yourself with Auto / On / Off, or press the action buttons.",
+    "Write rule cards in the Rules tab so the controller does it for you, like IF oxygen is below 4 THEN aerator ON.",
+    "Open Missions and press Play. Your rules have to keep everything healthy until the time is up."
+  ];
 
   function level(sensor, v) {
     if (v >= sensor.good[0] && v <= sensor.good[1]) return "good";
@@ -28,91 +42,118 @@
 
   function start(game) {
     document.body.dataset.game = game.id;
-    SND.init({ theme: game.id });
+    if (game.accent) { document.body.style.setProperty("--accent", game.accent[0]); document.body.style.setProperty("--accent-soft", game.accent[1]); }
+    SND.init({ theme: game.id, music: game.music });
     const KEY = "iotpg:" + game.id;
     const saved = IoT.store.get(KEY, {});
     let rules = Array.isArray(saved.rules) ? saved.rules : JSON.parse(JSON.stringify(game.defaultRules));
     let stars = saved.stars || {};
     let speed = SPEEDS[2];
-    let sim, mission = null, tab = saved.tab || "rules";
-    const save = () => IoT.store.set(KEY, { rules, stars, tab });
+    let sim, mission = null, tab = saved.tab || "rules", seenHelp = !!saved.seenHelp;
+    const save = () => IoT.store.set(KEY, { rules, stars, tab, seenHelp });
+    const ifEvents = game.ruleIfEvents || [];
 
-    function newSim(options = {}) {
-      sim = IoT.createSim(game.model, { ...game.options, ...options });
+    // Free play starts from the game's options; a mission starts from its own options only, exactly as the
+    // tests play it, so free-play settings (like a week of sunny weather) can't leak into a mission
+    function newSim(options = {}, forMission = false) {
+      sim = IoT.createSim(game.model, forMission ? { ...options } : { ...game.options, ...options });
       sim.rules = rules;
       game.scene.reset && game.scene.reset(sim);
     }
     newSim();
 
-    // ---- Screen ----
-    const clock = el("span", { class: "clock", "aria-live": "off" });
+    // ---- Top bar ----
     const speedBox = el("div", { class: "speed", role: "group", "aria-label": "Speed" },
       SPEEDS.map((s) => el("button", { type: "button", "aria-label": s.aria, "aria-pressed": String(s === speed), text: s.label,
         onclick: () => setSpeed(s) })));
+    const helpBtn = el("button", { type: "button", class: "icon-btn", "aria-label": "How to play", text: "?", onclick: () => openHelp() });
     const bar = el("header", { class: "bar" },
-      el("a", { class: "btn back", href: "./", "aria-label": "Back to all games" }, "←", el("span", { class: "wide-only", text: " Games" })), el("h1", { text: game.short || game.title, title: game.title }), clock, SND.button(), speedBox);
+      el("a", { class: "btn back", href: "./", "aria-label": "Back to all games" }, "←", el("span", { class: "wide-only", text: " Games" })),
+      el("h1", { text: game.short || game.title, title: game.title }), helpBtn, SND.button(), speedBox);
+
+    // ---- The stage: the scene with the clock, the weather buttons and the status line on top ----
     const sceneBox = el("div", { class: "scene", role: "img", "aria-label": game.sceneLabel });
-    const sceneClock = el("span", { class: "scene-clock", "aria-hidden": "true" }); // the clock over the scene, on phones
+    const sceneClock = el("span", { class: "scene-clock", "aria-hidden": "true" });
     const statusDot = el("span", { class: "dot" });
     const statusText = el("span");
     const status = el("p", { class: "status", "aria-live": "polite" }, statusDot, statusText);
-    const logBox = el("div", { class: "log", "aria-label": "What happened" });
+    const toast = el("p", { class: "toast", "aria-hidden": "true" });
+    const wxCanvas = el("canvas", { class: "wx", "aria-hidden": "true" });
 
-    const manual = el("div", { class: "manual" });
-    for (const sw of game.switches) {
-      const seg = el("div", { class: "seg", role: "group", "aria-label": sw.label }, el("span", { text: sw.label }));
-      for (const mode of ["auto", "on", "off"]) {
-        seg.append(el("button", { type: "button", "data-mode": mode, "aria-pressed": String(mode === "auto"), text: mode === "auto" ? "Auto" : mode === "on" ? "On" : "Off",
-          onclick: () => { sim.manual[sw.id] = mode; seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode))); } }));
-      }
-      manual.append(seg);
-    }
-    for (const ev of game.events) manual.append(el("button", { type: "button", class: "btn", text: ev.button, onclick: () => sim.trigger(ev.id) }));
-
-    // World controls (weather, temperature) for free play
-    const env = el("div", { class: "env" });
+    // World controls: a "Weather" choice becomes icon buttons on the scene; everything else lives in the World tab
     const envInputs = [];
+    let wxButtons = null;
+    const worldControls = el("div", { class: "env" });
     for (const c of game.env) {
       if (c.type === "choice") {
-        const chips = el("div", { class: "chips", role: "group", "aria-label": c.label });
-        for (const opt of c.options) chips.append(el("button", { type: "button", class: "chip", "data-v": opt.value, "aria-pressed": "false", text: opt.label,
-          onclick: () => { c.set(sim, opt.value); syncEnv(); } }));
-        env.append(chips);
+        const isWeather = /weather/i.test(c.label);
+        const chips = el("div", { class: isWeather ? "wx-pick" : "chips", role: "group", "aria-label": c.label });
+        for (const opt of c.options) chips.append(el("button", { type: "button", class: isWeather ? "wx-btn" : "chip", "data-v": opt.value, "aria-pressed": "false",
+          "aria-label": isWeather ? opt.label : null, title: isWeather ? opt.label : null, text: isWeather ? (WEATHER_ICON[opt.value] || opt.label) : opt.label,
+          onclick: () => { c.set(sim, opt.value); syncEnv(); SND.fx("tap"); } }));
+        if (isWeather) wxButtons = chips; else worldControls.append(el("div", { class: "env-row" }, el("span", { text: c.label }), chips));
         envInputs.push(() => chips.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(c.get(sim))))));
       } else {
         const out = el("output");
         const input = el("input", { type: "range", min: c.min, max: c.max, step: c.step, "aria-label": c.label,
           oninput: (e) => { c.set(sim, +e.target.value); syncEnv(); } });
-        env.append(el("label", {}, el("span", { text: c.label }), input, out));
+        worldControls.append(el("label", {}, el("span", { text: c.label }), input, out));
         envInputs.push(() => { input.value = c.get(sim); out.textContent = c.get(sim) + c.unit; });
       }
     }
     const syncEnv = () => envInputs.forEach((f) => f());
+    const stage = el("div", { class: "stage" }, sceneBox, wxCanvas, sceneClock, wxButtons, el("div", { class: "stage-foot" }, toast, status));
 
-    const gauges = el("div", { class: "gauges" });
+    // ---- Gauges: compact on phones, one tap opens what the sensor means ----
+    const gauges = el("div", { class: "gauges", "data-n": String(game.sensors.length) });
     const gaugeEls = game.sensors.map((s) => {
       const value = el("div", { class: "value" }), pill = el("span", { class: "pill" }), fill = el("i", { class: "fill" });
       const lo = (s.good[0] - s.min) / (s.max - s.min) * 100, hi = (s.good[1] - s.min) / (s.max - s.min) * 100;
-      const box = el("button", { type: "button", class: "gauge", "aria-label": s.label + ": tap to learn more", onclick: () => openSheet(s) },
-        el("div", { class: "label" }, el("span", { text: s.label }), pill), value,
+      const box = el("button", { type: "button", class: "gauge", "aria-label": s.label + ": tap to learn more", onclick: () => openSheet(s.learn.title, s.learn.text) },
+        el("div", { class: "label" }, el("span", { class: "name" }, s.icon ? el("b", { class: "ico", "aria-hidden": "true", text: s.icon }) : null, s.short || s.label), pill), value,
         el("div", { class: "track" }, el("i", { class: "band", style: `left:${lo}%;width:${hi - lo}%` }), fill));
       gauges.append(box);
       return { s, box, value, pill, fill };
     });
 
+    // ---- Manual controls ----
+    // On phones each switch shows only its current mode, and tapping it steps Auto → On → Off (one small button
+    // instead of three); from 900px wide all three buttons show.
+    const manual = el("div", { class: "manual" });
+    const compact = () => root.matchMedia && root.matchMedia("(max-width: 899px)").matches;
+    const MODES = ["auto", "on", "off"];
+    for (const sw of game.switches) {
+      const seg = el("div", { class: "seg", role: "group", "aria-label": sw.label }, el("span", { text: sw.label }));
+      const setMode = (mode) => { sim.manual[sw.id] = mode; seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode))); };
+      for (const mode of MODES) {
+        seg.append(el("button", { type: "button", "data-mode": mode, "aria-pressed": String(mode === "auto"), text: mode === "auto" ? "Auto" : mode === "on" ? "On" : "Off",
+          "aria-label": sw.label + " " + mode,
+          onclick: (e) => { const pressed = e.currentTarget.getAttribute("aria-pressed") === "true"; setMode(pressed && compact() ? MODES[(MODES.indexOf(mode) + 1) % 3] : mode); } }));
+      }
+      manual.append(seg);
+    }
+    for (const ev of game.events) manual.append(el("button", { type: "button", class: "btn btn--small", text: ev.button, onclick: () => sim.trigger(ev.id) }));
+    const resetSwitches = () => manual.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === "auto")));
+
+    // A strip that shows the running mission on every tab
+    const stripText = el("span"), stripBar = el("i");
+    const strip = el("div", { class: "strip", hidden: true, "aria-live": "polite" }, stripText, el("div", { class: "progress" }, stripBar));
+
     // ---- Tabs ----
-    const TABS = [["rules", "Rules"], ["missions", "Missions"], ["graph", "Graph"], ["code", "Code"], ["learn", "Learn"]];
+    const TABS = [["rules", "Rules"], ["missions", "Missions"], ["graph", "Graph"], ["code", "Code"], ["learn", "Learn"], ["world", "World"]];
     const tabBar = el("div", { class: "tabs", role: "tablist" });
     const panels = {};
     for (const [id, label] of TABS) {
       tabBar.append(el("button", { type: "button", role: "tab", id: "tab-" + id, "aria-controls": "panel-" + id, "aria-selected": String(id === tab), text: label,
         onclick: () => showTab(id) }));
-      panels[id] = el("section", { class: "panel " + id, role: "tabpanel", id: "panel-" + id, "aria-labelledby": "tab-" + id, hidden: id !== tab });
+      panels[id] = el("section", { class: "panel " + id, role: "tabpanel", id: "panel-" + id, "aria-labelledby": "tab-" + id, hidden: id !== tab, tabindex: "0" });
     }
+    if (!panels[tab]) tab = "rules";
     function showTab(id) {
       tab = id; save();
       tabBar.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.id === "tab-" + id)));
       for (const [k, p] of Object.entries(panels)) p.hidden = k !== id;
+      panels[id].scrollTop = 0;
       if (id === "code") renderCode();
       if (id === "graph") renderGraph();
     }
@@ -121,6 +162,7 @@
     const ruleList = el("div", { class: "rules" });
     const sensorById = Object.fromEntries(game.sensors.map((s) => [s.id, s]));
     const actName = (id) => (game.switches.concat(game.events).find((a) => a.id === id) || {}).label || id;
+    const isEvent = (id) => game.events.some((e) => e.id === id);
     function renderRules() {
       ruleList.replaceChildren();
       if (!rules.length) ruleList.append(el("p", { class: "hint", text: "No rules yet: nothing happens automatically. Add one below." }));
@@ -132,16 +174,18 @@
             game.ruleSensors.map((id) => el("option", { value: id, text: sensorById[id].label, selected: id === r.sensor })));
           const opSel = el("select", { "aria-label": "Comparison", onchange: (e) => { r.op = e.target.value; changed(); } },
             el("option", { value: "<", text: "is below", selected: r.op === "<" }), el("option", { value: ">", text: "is above", selected: r.op === ">" }));
-          const num = el("input", { type: "number", step: "0.1", value: r.value, "aria-label": "Value",
+          const num = el("input", { type: "number", step: "0.1", inputmode: "decimal", value: r.value, "aria-label": "Value",
             oninput: (e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) { r.value = v; changed(); } } });
           const unit = el("span", { class: "muted", text: sensorById[r.sensor].unit });
-          const aSel = el("select", { "aria-label": "Device", onchange: (e) => { r.actuator = e.target.value; changed(); } },
-            game.ruleSwitches.map((id) => el("option", { value: id, text: actName(id), selected: id === r.actuator })));
+          // An IF rule can switch a device ON, or START an action (like a timed UV cycle) once each time it turns true
+          const verb = el("span", { text: isEvent(r.actuator) ? "START" : "ON" });
+          const aSel = el("select", { "aria-label": "Device", onchange: (e) => { r.actuator = e.target.value; verb.textContent = isEvent(r.actuator) ? "START" : "ON"; changed(); } },
+            game.ruleSwitches.concat(ifEvents).map((id) => el("option", { value: id, text: actName(id), selected: id === r.actuator })));
           // Optional "until": keep the device on until the reading passes this level the other way (hysteresis)
-          const until = el("input", { type: "number", step: "0.1", value: typeof r.until === "number" ? r.until : "", placeholder: "optional", "aria-label": "Stay on until this value (optional)",
+          const until = el("input", { type: "number", step: "0.1", inputmode: "decimal", value: typeof r.until === "number" ? r.until : "", placeholder: "optional", "aria-label": "Stay on until this value (optional)",
             oninput: (e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) r.until = v; else delete r.until; changed(); } });
           ruleList.append(el("div", { class: "rule" }, el("span", { class: "kw", text: "IF" }), sSel, opSel, num, unit,
-            el("span", { class: "kw", text: "THEN" }), aSel, el("span", { text: "ON" }), el("span", { class: "kw", text: "UNTIL" }), until, del));
+            el("span", { class: "kw", text: "THEN" }), aSel, verb, el("span", { class: "kw", text: "UNTIL" }), until, del));
         } else {
           const t = el("input", { type: "time", value: r.time, "aria-label": "Time", oninput: (e) => { if (e.target.value) { r.time = e.target.value; changed(); } } });
           const aSel = el("select", { "aria-label": "Action", onchange: (e) => { r.actuator = e.target.value; changed(); } },
@@ -150,8 +194,9 @@
         }
       });
     }
+    const firstDevice = game.ruleSwitches[0] || ifEvents[0];
     const addIf = el("button", { type: "button", class: "btn", text: "+ IF rule",
-      onclick: () => { rules.push({ kind: "if", sensor: game.ruleSensors[0], op: "<", value: sensorById[game.ruleSensors[0]].good[0], actuator: game.ruleSwitches[0] }); SND.fx("pop"); save(); renderRules(); renderCode(); } });
+      onclick: () => { rules.push({ kind: "if", sensor: game.ruleSensors[0], op: "<", value: sensorById[game.ruleSensors[0]].good[0], actuator: firstDevice }); SND.fx("pop"); save(); renderRules(); renderCode(); } });
     const addAt = game.ruleEvents.length ? el("button", { type: "button", class: "btn", text: "+ Time rule",
       onclick: () => { rules.push({ kind: "at", time: "12:00", actuator: game.ruleEvents[0] }); SND.fx("pop"); save(); renderRules(); renderCode(); } }) : null;
     const resetRules = el("button", { type: "button", class: "btn", text: "Reset to examples",
@@ -169,14 +214,16 @@
         el("button", { type: "button", class: "btn btn--accent", text: mission && mission.def === m ? "Restart" : "Play", onclick: () => startMission(m) }))));
     }
     function startMission(m) {
-      newSim(m.options);
+      newSim(m.options, true);
+      resetSwitches();
       mission = { def: m, start: sim.minutes };
-      banner.hidden = false; banner.dataset.kind = "run";
+      banner.hidden = true; strip.hidden = false; strip.dataset.kind = "run";
+      stripText.textContent = m.title + ": starting…"; stripBar.style.width = "0%";
       syncEnv(); renderMissions(); setSpeed(SPEEDS[2]);
       SND.fx("start");
     }
     const freePlay = el("button", { type: "button", class: "btn", text: "Free play (no mission)",
-      onclick: () => { mission = null; banner.hidden = true; newSim(); syncEnv(); renderMissions(); } });
+      onclick: () => { mission = null; banner.hidden = true; strip.hidden = true; newSim(); resetSwitches(); syncEnv(); renderMissions(); } });
     panels.missions.append(el("h2", { text: "Missions" }), el("p", { text: game.missionsIntro || "Each mission sets up the world; your rule cards do the work. Change rules any time, even mid-mission." }),
       banner, missionList, el("div", { class: "add" }, freePlay));
 
@@ -213,34 +260,57 @@
 
     // Learn
     panels.learn.append(el("h2", { text: "Learn" }), el("p", { text: game.learnIntro }),
+      game.credit ? el("p", { class: "credit" }, game.credit.text, game.credit.url ? [" ", el("a", { href: game.credit.url, text: "More", target: "_blank", rel: "noopener" })] : null) : null,
       el("dl", {}, [...game.sensors.map((s) => [el("dt", { text: s.learn.title }), el("dd", { text: s.learn.text })]),
         ...game.learnMore.map((t) => [el("dt", { text: t.title }), el("dd", { text: t.text })])]),
       el("p", { class: "sources" }, "Sources: ", ...game.sources.flatMap((s, i) => [i ? " · " : "", el("a", { href: s.url, text: s.label, target: "_blank", rel: "noopener" })])));
 
-    // Sensor sheet
-    const sheetTitle = el("h2"), sheetText = el("p"), sheetClose = el("button", { type: "button", class: "btn btn--primary", text: "Close", onclick: () => closeSheet() });
+    // World: weather and other settings for free play, and the log of what happened
+    const logBox = el("div", { class: "log", "aria-label": "What happened" });
+    panels.world.append(el("h2", { text: "World" }),
+      el("p", { text: game.env.length ? "Change the world for free play. Missions set these for you." : "What happened, newest first." }),
+      worldControls, el("h3", { class: "sub", text: "What happened" }), logBox);
+
+    // ---- Sheets: one sensor explained, and How to play ----
+    const sheetTitle = el("h2"), sheetBody = el("div"), sheetClose = el("button", { type: "button", class: "btn btn--primary", text: "Close", onclick: () => closeSheet() });
     const sheet = el("div", { class: "sheet", hidden: true, role: "dialog", "aria-modal": "true", "aria-labelledby": "sheet-title",
-      onclick: (e) => { if (e.target === sheet) closeSheet(); } }, el("div", {}, sheetTitle, sheetText, sheetClose));
+      onclick: (e) => { if (e.target === sheet) closeSheet(); } }, el("div", {}, sheetTitle, sheetBody, sheetClose));
     sheetTitle.id = "sheet-title";
-    let sheetFrom = null;
-    function openSheet(s) { sheetFrom = document.activeElement; sheetTitle.textContent = s.learn.title; sheetText.textContent = s.learn.text; sheet.hidden = false; sheetClose.focus(); }
-    function closeSheet() { sheet.hidden = true; if (sheetFrom) sheetFrom.focus(); }
+    let sheetFrom = null, pausedFor = null;
+    function openSheet(title, body) {
+      sheetFrom = document.activeElement; sheetTitle.textContent = title;
+      sheetBody.replaceChildren(...(Array.isArray(body) ? [el("ol", { class: "steps" }, body.map((t) => el("li", { text: t })))] : [el("p", { text: body })]));
+      sheet.hidden = false; sheetClose.focus();
+    }
+    function closeSheet() {
+      sheet.hidden = true;
+      if (pausedFor) { setSpeed(pausedFor); pausedFor = null; }
+      if (sheetFrom) sheetFrom.focus();
+    }
+    function openHelp() {
+      if (speed.rate) { pausedFor = speed; setSpeed(SPEEDS[0]); }
+      openSheet("How to play " + (game.short || game.title), game.howTo || HOW_TO);
+      sheetClose.textContent = "Let's play";
+      if (!seenHelp) { seenHelp = true; save(); }
+    }
+    sheetClose.addEventListener("click", () => { sheetClose.textContent = "Close"; });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !sheet.hidden) closeSheet(); });
 
-    const sceneCol = el("div", { class: "scene-col" }, sceneBox, status, manual, env, logBox);
-    const side = el("div", {}, gauges, el("div", { style: "height:14px" }), tabBar, ...Object.values(panels));
-    document.body.replaceChildren(bar, el("main", { class: "wrap" }, el("div", { class: "layout" }, sceneCol, side)), sheet);
+    const dock = el("div", { class: "dock" }, strip, tabBar, ...Object.values(panels));
+    document.body.replaceChildren(bar, el("main", { class: "shell" }, stage, gauges, manual, dock), sheet);
     game.scene.mount(sceneBox, sim);
-    sceneBox.append(sceneClock);
     game.scene.draw(sim, performance.now()); // draw once right away, before the first animation frame
+
+    // ---- Weather layer: rain, drifting cloud shadows or warm sunlight drawn over the scene ----
+    const wx = root.IoTWeather ? root.IoTWeather.attach(wxCanvas, { onThunder: (delay) => SND.fx("thunder", delay) }) : null;
 
     // ---- Running ----
     function setSpeed(s) { speed = s; speedBox.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-pressed", String(SPEEDS[i] === s))); }
-    let last = performance.now(), carry = 0, lastUi = 0, lastGraph = 0, lastAlert = 0;
+    let last = performance.now(), carry = 0, lastUi = 0, lastGraph = 0, lastAlert = 0, toastUntil = 0, lastLog = 0;
     const now = () => performance.now();
-    function frame(now) {
-      const dt = Math.min(0.25, (now - last) / 1000);
-      last = now;
+    function frame(t) {
+      const dt = Math.min(0.25, (t - last) / 1000);
+      last = t;
       carry += speed.rate * dt;
       let n = Math.floor(carry);
       carry -= n;
@@ -254,24 +324,27 @@
         }
       }
       for (const ev of heard) SND.fx((game.eventSounds && game.eventSounds[ev]) || "pop");
-      game.scene.draw(sim, now);
-      if (now - lastUi > 200) { updateUi(); lastUi = now; }
-      if (tab === "graph" && now - lastGraph > 1000) { renderGraph(); lastGraph = now; }
+      game.scene.draw(sim, t);
+      if (wx) wx.draw(game.weather ? game.weather(sim) : null, t, speed.rate);
+      if (t - lastUi > 200) { updateUi(); lastUi = t; }
+      if (tab === "graph" && t - lastGraph > 1000) { renderGraph(); lastGraph = t; }
       requestAnimationFrame(frame);
     }
     function finishMission(r) {
       setSpeed(SPEEDS[0]);
-      banner.dataset.kind = r.state;
       if (r.state === "won") { stars[mission.def.id] = Math.max(stars[mission.def.id] || 0, r.stars || 1); save(); }
       SND.fx(r.state === "won" ? "win" : "lose", r.stars || 1);
+      strip.dataset.kind = r.state;
+      stripText.textContent = (r.state === "won" ? "🎉 " : "") + r.message;
+      stripBar.style.width = r.state === "won" ? "100%" : "0%";
+      banner.hidden = false; banner.dataset.kind = r.state;
       banner.replaceChildren(document.createTextNode(r.message));
       mission = { ...mission, done: true };
       renderMissions();
       mission = null;
     }
     function updateUi() {
-      clock.textContent = IoT.clockText(sim.minutes);
-      sceneClock.textContent = clock.textContent;
+      sceneClock.textContent = IoT.clockText(sim.minutes);
       const readings = game.model.readings(sim.state);
       for (const g of gaugeEls) {
         const v = readings[g.s.id];
@@ -283,22 +356,29 @@
         g.value.replaceChildren(document.createTextNode(v.toFixed(g.s.decimals)), el("small", { text: g.s.unit }));
         g.fill.style.left = IoT.clamp((v - g.s.min) / (g.s.max - g.s.min) * 100, 0, 99.5) + "%";
       }
-      if (game.soundState) SND.update(game.soundState(sim));
+      const snd = { hour: IoT.timeOfDay(sim.minutes).hour, ...(game.soundState ? game.soundState(sim) : {}) };
+      const w = game.weather ? game.weather(sim) : null;
+      SND.update(w ? { ...snd, weather: w.sky, night: snd.night ?? w.night, rain: w.sky === "rainy" && (w.rain ?? 1) > 0 } : snd);
       const st = game.status(sim);
       status.dataset.level = st.level;
       statusText.textContent = st.text;
-      logBox.replaceChildren(...sim.log.slice(-4).reverse().map((l) => el("div", { text: IoT.clockText(l.minutes) + " · " + l.text })));
+      // The newest log line pops up over the scene for a few seconds
+      const newest = sim.log[sim.log.length - 1];
+      if (newest && newest.minutes !== lastLog && newest !== toast._last) { toast._last = newest; lastLog = newest.minutes; toast.textContent = newest.text; toastUntil = now() + 2600; }
+      toast.dataset.show = String(now() < toastUntil);
+      logBox.replaceChildren(...sim.log.slice(-12).reverse().map((l) => el("div", { text: IoT.clockText(l.minutes) + " · " + l.text })));
       if (mission && mission.result && mission.result.state === "running") {
-        banner.replaceChildren(document.createTextNode(mission.def.title + ": " + mission.result.message),
-          el("div", { class: "progress" }, el("i", { style: `width:${Math.round(mission.result.progress * 100)}%` })));
+        stripText.textContent = mission.def.title + ": " + mission.result.message;
+        stripBar.style.width = Math.round(mission.result.progress * 100) + "%";
       }
     }
 
     renderRules(); renderMissions(); renderCode(); syncEnv(); showTab(tab); updateUi();
     requestAnimationFrame(frame);
+    if (!seenHelp) setTimeout(openHelp, 400);
     // refresh() redraws the scene and the readings at once (the animation loop normally does this)
-    return { get sim() { return sim; }, rules, startMission, setSpeed: (id) => setSpeed(SPEEDS.find((s) => s.id === id)),
-      refresh(now = performance.now()) { game.scene.draw(sim, now); updateUi(); if (tab === "graph") renderGraph(); } };
+    return { get sim() { return sim; }, rules, startMission, showTab, setSpeed: (id) => setSpeed(SPEEDS.find((s) => s.id === id)),
+      refresh(t = performance.now()) { game.scene.draw(sim, t); if (wx) wx.draw(game.weather ? game.weather(sim) : null, t, speed.rate); updateUi(); if (tab === "graph") renderGraph(); } };
   }
 
   root.IoTUI = { start, level };

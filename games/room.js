@@ -161,13 +161,13 @@
     id: "room", title: "My Korean Room Monitor", short: "Room", model: RoomModel, options: { startMinutes: 18 * 60, outHigh: 2 },
     sceneLabel: "A small studio room in winter with a window onto apartment blocks, floor heating, a humidifier and an air purifier",
     sensors: [
-      { id: "temp", label: "Temperature", unit: "°C", decimals: 1, min: 0, max: 35, good: [18, 26], warn: [16, 28],
+      { id: "temp", label: "Temperature", short: "Temp", icon: "🌡️", unit: "°C", decimals: 1, min: 0, max: 35, good: [18, 26], warn: [16, 28],
         learn: { title: "Temperature (°C)", text: "The World Health Organization recommends keeping homes at 18 °C or warmer in cold seasons. Most Korean homes heat the floor (ondol): it was once warmed by fire under stone, and today hot water from a boiler runs in pipes under the floor. A sensor such as the SHT31 or DHT22 measures temperature and humidity together." } },
-      { id: "humidity", label: "Humidity", unit: "%", decimals: 0, min: 0, max: 100, good: [30, 60], warn: [25, 70],
+      { id: "humidity", label: "Humidity", icon: "💧", unit: "%", decimals: 0, min: 0, max: 100, good: [30, 60], warn: [25, 70],
         learn: { title: "Relative humidity (%)", text: "Relative humidity is how much water the air holds compared with the most it could hold at that temperature. Warm air can hold more, so heating cold winter air makes the room very dry, and opening the window in winter dries it further. The US EPA advises keeping indoor humidity below 60%, ideally between 30% and 50%: very dry air feels harsh on skin and eyes, while damp air condenses on cold windows and helps mould grow." } },
-      { id: "pm", label: "Fine dust PM2.5", unit: "µg/m³", decimals: 0, min: 0, max: 150, good: [0, 35], warn: [35, 75],
+      { id: "pm", label: "Fine dust PM2.5", short: "PM2.5", icon: "🌫️", unit: "µg/m³", decimals: 0, min: 0, max: 150, good: [0, 35], warn: [35, 75],
         learn: { title: "Fine dust, PM2.5 (µg/m³)", text: "PM2.5 means particles 2.5 micrometres across or smaller, small enough to reach deep into the lungs. Korea's forecasts (AirKorea) grade PM2.5 as Good up to 15 µg/m³, Moderate 16–35, Bad 36–75 and Very bad from 76. Low-cost indoor sensors such as the Plantower PMS5003 count particles by how they scatter a laser beam. An air purifier with a HEPA filter pulls particles out of the room's air." } },
-      { id: "co2", label: "CO2", unit: "ppm", decimals: 0, min: 400, max: 2500, good: [400, 1000], warn: [1000, 1500],
+      { id: "co2", label: "CO2", icon: "😮‍💨", unit: "ppm", decimals: 0, min: 400, max: 2500, good: [400, 1000], warn: [1000, 1500],
         learn: { title: "Carbon dioxide (ppm)", text: "Outdoor air has about 420 ppm (parts per million) of CO2. Every breath adds more, so a small closed room with one person keeps climbing; high CO2 is a sign the air needs freshening and can make you feel sleepy. Korea's Indoor Air Quality Control Act requires multi-use facilities (subway stations, hospitals, daycare centres, large stores and so on) to keep CO2 at 1,000 ppm or below. Real CO2 sensors such as the MH-Z19 or SCD30 measure it with infrared light (NDIR); cheap \"eCO2\" sensors only estimate it from other gases." } }
     ],
     switches: [{ id: "heater", label: "Heating" }, { id: "humidifier", label: "Humidifier" }, { id: "purifier", label: "Purifier" }, { id: "window", label: "Window" }],

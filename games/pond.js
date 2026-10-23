@@ -98,6 +98,7 @@
       sunEl.setAttribute("cx", 80 + 640 * ((hour - 6) / 12));
       sunEl.setAttribute("cy", 220 - Math.sin(ang) * 180);
       sunEl.setAttribute("fill", visible ? "#ffd25a" : "#e8ecf2");
+      sunEl.setAttribute("opacity", visible ? (s.weather === "rainy" ? 0 : s.weather === "cloudy" ? 0.45 : 1) : 1); // the sun hides behind rain clouds
       if (!visible) { const nh = ((hour + 6) % 24) / 12; sunEl.setAttribute("cx", 80 + 640 * Math.min(1, nh)); sunEl.setAttribute("cy", 220 - Math.sin(Math.PI * Math.min(1, nh)) * 160); }
       cloudG.setAttribute("opacity", s.weather === "sunny" ? "0" : "0.95");
       rainG.setAttribute("opacity", s.weather === "rainy" ? "1" : "0");
@@ -143,14 +144,16 @@
   window.IoTGame = IoTUI.start({
     id: "pond", title: "FLOATech Pond", short: "Pond", model: PondModel, options: { weather: "sunny", airHigh: 31 },
     sceneLabel: "A tilapia pond with a floating solar-powered unit, fish swimming below",
+    howTo: ["Watch the four gauges. Green is healthy. Tap one to learn what it measures.", "Fish need oxygen. Algae make it in sunlight, so it drops at night and on cloudy days.",
+      "In the Rules tab, add: IF Oxygen is below 4 THEN Aerator ON. The bubbles start by themselves.", "Open Missions and press Play. Use the ☀️ ☁️ 🌧️ buttons on the pond to change the weather in free play."],
     sensors: [
-      { id: "temp", label: "Water temp", unit: "°C", decimals: 1, min: 10, max: 40, good: [25, 30], warn: [17, 35],
+      { id: "temp", label: "Water temp", short: "Water", icon: "🌡️", unit: "°C", decimals: 1, min: 10, max: 40, good: [25, 30], warn: [17, 35],
         learn: { title: "Water temperature (°C)", text: "Tilapia are tropical fish: they grow best in water of about 25–30 °C. Below about 17 °C they stop eating, and most can't survive more than a few days at 10–11 °C. Water warms and cools much more slowly than air, so the pond's temperature lags behind the weather. A waterproof DS18B20 probe is a common, cheap sensor for this." } },
-      { id: "oxygen", label: "Oxygen", unit: "mg/L", decimals: 1, min: 0, max: 12, good: [5, 12], warn: [3, 5],
+      { id: "oxygen", label: "Oxygen", icon: "🫧", unit: "mg/L", decimals: 1, min: 0, max: 12, good: [5, 12], warn: [3, 5],
         learn: { title: "Dissolved oxygen (mg/L)", text: "Fish breathe oxygen dissolved in the water. Tilapia are unusually tough: they can survive brief dawn lows below 1 mg/L, but they eat and grow poorly when oxygen stays low, and farm guides say to keep ponds above 1 mg/L. This game treats 5 mg/L and above as healthy, below 3 as stressful and below 1 as dangerous. Algae make oxygen in sunlight, while fish, algae and rotting feed use it all the time, so oxygen is highest in the afternoon and lowest around dawn. An aerator mixes air into the water when it runs low. Real DO probes need regular calibration." } },
-      { id: "ph", label: "pH", unit: "", decimals: 2, min: 5, max: 10, good: [6.5, 8.5], warn: [6, 9],
+      { id: "ph", label: "pH", icon: "🧪", unit: "", decimals: 2, min: 5, max: 10, good: [6.5, 8.5], warn: [6, 9],
         learn: { title: "pH", text: "pH measures how acidic (below 7) or alkaline (above 7) the water is. Tilapia do best between about 6.5 and 8.5, and can survive a wider range (5 to 10). When algae photosynthesise they remove carbon dioxide, so pH rises in sunny afternoons and falls again at night." } },
-      { id: "battery", label: "Solar battery", unit: "%", decimals: 0, min: 0, max: 100, good: [30, 100], warn: [10, 30],
+      { id: "battery", label: "Battery", icon: "🔋", unit: "%", decimals: 0, min: 0, max: 100, good: [30, 100], warn: [10, 30],
         learn: { title: "Solar battery (%)", text: "FLOATech runs off-grid: a solar panel charges a battery during the day, and the battery powers the controller and the aerator. The aerator uses the most power, so running it all night can empty the battery before sunrise, exactly when oxygen is lowest." } }
     ],
     switches: [{ id: "aerator", label: "Aerator" }],
@@ -165,6 +168,8 @@
     missions, scene,
     missionsIntro: "Each mission sets up the pond: the weather, the heat and the battery. Your rule cards do the work. Change rules any time, even mid-mission.",
     eventSounds: { feeder: "plop" },
+    // The sky for the weather layer and its sounds: the chosen weather all day, darkness from dusk to dawn
+    weather: (sim) => { const h = IoT.timeOfDay(sim.minutes).hour; return { sky: sim.state.weather, night: h < 5.5 || h > 18.75 }; },
     soundState: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour; return { ambience: ["water", "wind"], night: h < 5.5 || h > 19, rain: s.weather === "rainy", devices: { bubbles: s.aeratorOn } }; },
     status: (sim) => { const m = PondModel.mood(sim.state); return { level: LEVEL[m.id], text: `${m.text} · health ${Math.round(sim.state.health)}%` }; },
     rulesIntro: "This is how FLOATech's controller decides what to do. An IF rule keeps a device on while the condition is true. A time rule runs an action once a day.",

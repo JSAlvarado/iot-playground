@@ -63,11 +63,17 @@
       history: [],         // one sample every 10 virtual minutes: { minutes, ...readings }
       log: [],             // what happened, newest last
       pending: [],         // actions the player triggered by hand ("Feed now"), run on the next tick
+      edge: {},            // IF rules on an event (like "start the UV cycle") fire once each time they turn true
       trigger(id) { sim.pending.push(id); },
       tick() {
         const readings = model.readings(sim.state);
         const { on, events } = evaluateRules(sim.rules, readings, sim.minutes, sim.latch);
         events.push(...sim.pending.splice(0));
+        for (const [id, a] of Object.entries(model.actuators)) {
+          if (a.kind !== "event") continue;
+          if (on[id] && !sim.edge[id]) events.push(id);
+          sim.edge[id] = !!on[id];
+        }
         const switches = {};
         for (const [id, a] of Object.entries(model.actuators)) {
           if (a.kind !== "switch") continue;
@@ -109,8 +115,11 @@
     for (const [id, a] of acts) if (!a.drives) lines.push(`const int ${pinName(id)} = ${a.pin};   // ${a.label}`);
     if (usesTime) lines.push("RTC_DS3231 rtc;", "int lastMinuteRun = -1;");
     for (const [id, a] of timed) lines.push(`unsigned long ${id}Until = 0;   // ${a.label}: when the timer ends`);
+    const msOf = (a) => (a.durationMs ? `${a.durationMs}UL` : `${a.durationMin}UL * 60UL * 1000UL`);
     const ifRules = rules.filter((r) => r.kind === "if");
     const latched = ifRules.filter(hasUntil);
+    const edgeIds = [...new Set(ifRules.map((r) => r.actuator).filter((id) => spec.actuators[id] && spec.actuators[id].kind === "event"))];
+    for (const id of edgeIds) lines.push(`bool ${id}WasTrue = false;   // so the rule starts the ${id} only once each time it becomes true`);
     latched.forEach((r, i) => lines.push(`bool ${r.actuator}Hold${i + 1} = false;   // rule ${i + 1} keeps the ${r.actuator} on until ${r.sensor} ${r.op === "<" ? ">" : "<"} ${r.until}`));
     lines.push("");
     for (const [, s] of Object.entries(spec.sensors)) lines.push(`float ${s.fn}();   // ${s.label}, in ${s.unit}`);
@@ -126,7 +135,7 @@
         const a = spec.actuators[r.actuator];
         if (a.drives) {
           lines.push(`    if (minuteOfDay == ${parseTime(r.time)}) {   // ${r.time}: ${a.label}`,
-            `      ${r.actuator}Until = millis() + ${a.durationMin}UL * 60UL * 1000UL;`, "    }");
+            `      ${r.actuator}Until = millis() + ${msOf(a)};`, "    }");
         } else {
           lines.push(`    if (minuteOfDay == ${parseTime(r.time)}) {   // ${r.time}: ${a.label}`,
             `      digitalWrite(${pinName(r.actuator)}, HIGH);`, `      delay(${a.pulseMs || 3000});   // run it for a moment`,
@@ -142,14 +151,22 @@
         lines.push(`  if (${r.sensor} ${r.op} ${r.value}) ${v} = true;`, `  else if (${r.sensor} ${r.op === "<" ? ">" : "<"} ${r.until}) ${v} = false;`);
       });
     }
+    // IF rules that start a timed cycle fire once when they become true
+    for (const id of edgeIds) {
+      const a = spec.actuators[id];
+      const conds = ifRules.filter((r) => r.actuator === id).map((r) => (hasUntil(r) ? `${r.actuator}Hold${latched.indexOf(r) + 1}` : `${r.sensor} ${r.op} ${r.value}`));
+      lines.push("", `  // ${a.label}: start it when ${conds.join(" or ")} becomes true`, `  bool ${id}Now = ${conds.join(" || ")};`,
+        `  if (${id}Now && !${id}WasTrue) ${a.drives ? `${id}Until = millis() + ${msOf(a)};` : `{ digitalWrite(${pinName(id)}, HIGH); delay(${a.pulseMs || 3000}); digitalWrite(${pinName(id)}, LOW); }`}`, `  ${id}WasTrue = ${id}Now;`);
+    }
     const byActuator = {};
-    ifRules.forEach((r) => { (byActuator[r.actuator] = byActuator[r.actuator] || []).push(hasUntil(r) ? `${r.actuator}Hold${latched.indexOf(r) + 1}` : `${r.sensor} ${r.op} ${r.value}`); });
+    ifRules.filter((r) => !edgeIds.includes(r.actuator)).forEach((r) => { (byActuator[r.actuator] = byActuator[r.actuator] || []).push(hasUntil(r) ? `${r.actuator}Hold${latched.indexOf(r) + 1}` : `${r.sensor} ${r.op} ${r.value}`); });
     for (const [id, a] of acts) {
       if (a.kind !== "switch") continue;
       const conds = (byActuator[id] || []).slice();
       for (const [eid, e] of timed) if (e.drives === id) conds.push(`(long)(${eid}Until - millis()) > 0`);
-      lines.push("", `  // ${a.label}: ON while ${conds.length ? conds.join(" or ") : "no rule says so"}`);
-      lines.push(`  digitalWrite(${pinName(id)}, ${conds.length ? "(" + conds.join(" || ") + ")" : "false"} ? HIGH : LOW);`);
+      const guard = a.onlyIf ? ` && ${a.onlyIf}` : "";
+      lines.push("", `  // ${a.label}: ON while ${conds.length ? conds.join(" or ") : "no rule says so"}${a.onlyIf ? ` (and only while ${a.onlyIf})` : ""}`);
+      lines.push(`  digitalWrite(${pinName(id)}, ${conds.length ? "(" + conds.join(" || ") + ")" + guard : "false"} ? HIGH : LOW);`);
     }
     lines.push("", "  delay(1000);   // check again every second", "}");
     return lines.join("\n");
