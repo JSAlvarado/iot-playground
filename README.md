@@ -3,9 +3,7 @@
 **Play it: https://jsalvarado.github.io/iot-playground/**
 
 Browser games that teach how sensors, microcontrollers and automation work, for people who have never touched
-electronics. Pick a game, watch live sensor readings, switch devices on and off, and write simple **rule cards**
-("IF oxygen is below 4 THEN aerator ON") that make things automatic. Every game turns your rules into **real
-Arduino code**. Built by Johnstheward S. Alvarado.
+electronics. Pick a game, watch live sensor readings, switch devices on and off, and write simple 
 
 ## Games
 
@@ -50,19 +48,6 @@ a speaker button to turn effects or music off.
 
 The simulations are simplified so they run in a phone browser, but their directions and healthy ranges follow
 published sources, listed in each game's Learn tab:
-
-- **Tilapia:** best growth around 25–30 °C, most stop feeding below about 17 °C and can't survive more than a few
-  days at 10–11 °C (SRAC 283). Best pH 6.5–8.5 (FAO). Tilapia survive brief oxygen lows below 1 mg/L, but ponds should
-  stay above 1 mg/L (SRAC); the game treats 5 mg/L and above as healthy, below 3 as stressful and below 1 as danger.
-- **Oxygen saturation** (how much oxygen water can hold) is calculated with the APHA freshwater equation:
-  9.09 mg/L at 20 °C, 8.26 mg/L at 25 °C.
-- **Plants:** waterlogged soil pushes out the air roots need and can lead to root rot (UConn, Iowa State Extension).
-- **Room:** Korea's PM2.5 forecast grades (good 0–15, moderate 16–35, bad 36–75, very bad 76+ µg/m³), Korea's
-  1,000 ppm CO2 standard for multi-use facilities, the US EPA's humidity advice (below 60%, ideally 30–50%), WHO's 18 °C
-  minimum indoor temperature, and the advice to air out about 10 minutes three times a day even on fine-dust days.
-  Humidity is modelled as water in the air with the Magnus formula, so heating dry winter air really lowers it.
-- **Circuits:** 5 V logic, about 2 V across an LED (220 Ω gives about 14 mA, under the Uno's 20 mA pin rating),
-  analogRead 0–1023, TMP36 output 0.5 V + 10 mV/°C, and the DS18B20 library's −127 °C "disconnected" value.
 
 ## How it is built
 
