@@ -220,7 +220,7 @@
     ],
     sources: [
       { label: "UC Master Gardeners: Soil temperature for vegetable seed germination", url: "https://ucanr.edu/program/uc-master-gardener-program/seed-germination-temperature-and-timing" },
-      { label: "University of Arizona: High temperature and tomato germination (thesis, 1990)", url: "https://repository.arizona.edu/handle/10150/185152" },
+      { label: "University of Arizona: High temperature and tomato germination (thesis, 1990)", url: "https://repository.arizona.edu/items/68ec6813-2442-4047-ba31-b4c45235715b" },
       { label: "Tomato seed thermo-inhibition (BMC Plant Biology, 2018)", url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6182833/" },
       { label: "UConn IPM: Damping-off of seedlings", url: "https://ipm.cahnr.uconn.edu/damping-off-of-ornamental-and-vegetable-seedlings/" },
       { label: "Purdue Extension: Leggy tomatoes", url: "https://www.purdue.edu/hla/sites/yardandgarden/leggy-tomatoes/" },

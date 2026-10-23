@@ -28,7 +28,7 @@ design** from **game values** taken from published sources, and credits the proj
 | **UV Tomato Guard** | TOMATRIX (UV-C tomato chamber) | Gas sensors decide when to run a fixed 3-minute UV-C cycle; the lid interlock keeps it safe; keep temperature and humidity in band. |
 | **Seedling Chamber** | SeedSpark (solar seedling microclimate chamber) | Water by soil moisture, vent a hot chamber and keep damp nights from rotting tomato and eggplant seedlings. |
 | **Cold Cart** | SPARC (solar thermoelectric cold box) | Keep a vendor's fish at 4 °C or colder; a Peltier needs its hot side cooled, and the battery has to last the market day. |
-| **Curb-E Smart Sign Patrol** | Curb-E (AI no-parking smart sign) | Thresholds and false alarms: catch parked cars without flagging brief stops, and upload evidence only when the plate read is clear. |
+| **Curb-E Smart Sign Patrol** | Curb-E (AI no-parking smart sign) | Thresholds and false alarms: catch parked cars without flagging brief stops, and upload evidence only when the plate read is clear. An Evidence tab shows every record the sign sent, like the traffic office's website. |
 
 The simulation games share the same tabs: **Rules** (rule cards, with an optional UNTIL level for
 hysteresis, and IF rules that can START a timed action such as a UV-C cycle), **Missions** (goals with stars),

@@ -13,7 +13,7 @@
   const missions = M.missions;
 
   // ---- The scene: an original flat drawing of a fish stall with the solar cold box ----
-  let svg, sky, sunEl, panel, panelGlint, boxBody, frost, screenTxt, gasTxt, led, lid, mist, coolIcon, fins = [], fans = [], heatWaves = [], stink = [], fish = [], battFill, lamp;
+  let svg, sky, sunEl, panel, panelGlint, boxBody, frost, screenTxt, gasTxt, led, lid, mist, coolIcon, fins = [], fans = [], heatWaves = [], stink = [], battFill, lamp;
   let lidAngle = 0, fanAngle = 0, lastNow = 0;
   const FONT = "Outfit, sans-serif";
   const scene = {
@@ -43,15 +43,6 @@
       mk("rect", { x: 568, y: 394, width: 66, height: 14, rx: 3, fill: "#555c62" }, svg);
       battFill = mk("rect", { x: 568, y: 394, width: 66, height: 14, rx: 3, fill: "#3aa35b" }, svg);
       mk("rect", { x: 634, y: 398, width: 6, height: 6, fill: "#555c62" }, svg);
-      // A tray of fish on display (fewer as they sell)
-      mk("rect", { x: 132, y: 330, width: 128, height: 30, rx: 6, fill: "#cfe6f0", stroke: "#8fb6c8", "stroke-width": 2 }, svg);
-      for (let i = 0; i < 6; i++) {
-        const g = mk("g", { transform: `translate(${146 + (i % 3) * 36} ${338 + Math.floor(i / 3) * 12})` }, svg);
-        const body = mk("path", { d: "M0 0 q14 -8 28 0 q-14 8 -28 0 z", fill: "#9aa7ab" }, g);
-        mk("path", { d: "M27 0 l8 -6 v12 z", fill: "#7f8d92" }, g);
-        mk("circle", { cx: 5, cy: -1, r: 1.6, fill: "#1d2a30" }, g);
-        fish.push({ g, body });
-      }
       // The cold box: EPS inside a metal case, a screen, a fingerprint pad and the clamp to the table
       boxBody = mk("rect", { x: 280, y: 236, width: 230, height: 124, rx: 10, fill: "#eef3f6", stroke: "#7c8a94", "stroke-width": 4 }, svg);
       frost = mk("rect", { x: 288, y: 244, width: 214, height: 108, rx: 7, fill: "#bfe4f5", opacity: 0 }, svg);
@@ -137,10 +128,6 @@
         w.setAttribute("transform", `translate(${330 + i * 60} ${y.toFixed(1)})`);
         w.setAttribute("opacity", (g > 0.3 ? g : 0).toFixed(2));
       });
-      // Fish on the tray: fewer as they sell, duller and greener as they spoil
-      const shown = Math.min(6, Math.ceil(M.fishKg(s) / 3.5));
-      const spoil = Math.max(...s.fish.map((f) => (f.kg > 0 ? f.s : 0)));
-      fish.forEach((f, i) => { f.g.setAttribute("opacity", i < shown ? 1 : 0); f.body.setAttribute("fill", mix("#a9b8bd", "#8a9a5a", (spoil - 0.3) / 0.6)); });
     }
   };
 
@@ -170,7 +157,7 @@
     switches: [{ id: "peltier", label: "Peltier" }, { id: "fans", label: "Fans" }],
     events: [{ id: "alert", label: "Freshness alert", button: "Check fish" }],
     ruleSensors: ["box", "sink", "gas", "battery"], ruleSwitches: ["peltier", "fans"], ruleEvents: ["alert"], ruleIfEvents: ["alert"],
-    defaultRules: [{ kind: "if", sensor: "box", op: ">", value: 4, until: 2, actuator: "peltier" }, { kind: "if", sensor: "sink", op: ">", value: 35, actuator: "fans" }],
+    defaultRules: [{ kind: "if", sensor: "box", op: ">", value: 4, until: 2, actuator: "peltier" }, { kind: "if", sensor: "sink", op: ">", value: 55, actuator: "fans" }], // fans only when very hot: fine on a normal day, not in missions 2–4
     env: [
       { type: "choice", label: "Weather", options: [{ value: "sunny", label: "Sunny" }, { value: "cloudy", label: "Cloudy" }, { value: "rainy", label: "Rainy" }],
         get: (sim) => sim.state.weather, set: (sim, v) => { sim.state.weather = v; sim.state.weatherDays = null; } },
@@ -185,7 +172,7 @@
       return { ambience: open ? ["market", "traffic"] : ["traffic"], night: h < 5.5 || h > 19, rain: s.weather === "rainy", devices: { fan: s.fansOn, hum: s.peltierOn ? 0.5 : 0 } }; },
     status: (sim) => { const m = M.mood(sim.state); return { level: LEVEL[m.id], text: `${m.text} · ${Math.round(M.fishKg(sim.state))} kg` }; },
     rulesIntro: "This is how the cold box's controller decides what to do. An IF rule keeps a device on while the condition is true; UNTIL keeps it on until a second level. An IF rule can also START the freshness alert once.",
-    rulesTip: "The examples: IF Box temp is above 4 THEN Peltier ON UNTIL 2, and IF Heatsink is above 35 THEN Fans ON. For mission 5 add: IF Spoilage gas is above 40 THEN Freshness alert START. The buzzer calls the vendor, who unlocks the box with a fingerprint and takes out fish that smell off.",
+    rulesTip: "The examples: IF Box temp is above 4 THEN Peltier ON UNTIL 2, and IF Heatsink is above 55 THEN Fans ON. That fan rule waits until the hot side is very hot, which is fine on a normal day. For missions 2–4, try running the fans sooner (above 35) and letting the box rest a little longer (UNTIL 3.5): a cooler hot side pumps heat with less power. For mission 5 add: IF Spoilage gas is above 40 THEN Freshness alert START. The buzzer calls the vendor, who unlocks the box with a fingerprint and takes out fish that smell off.",
     codeIntro: "Your rule cards written as an Arduino-style sketch. SPARC's controller is a Raspberry Pi Zero 2 W, which would usually run the same logic in Python; the pin numbers here are its GPIO numbers. The read...() functions stand in for each sensor's real code.",
     codeSpec: {
       title: "SPARC cold box controller (Raspberry Pi Zero 2 W)",

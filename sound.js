@@ -125,19 +125,22 @@
     const g = gainNode(0); let L = { gain: g };
     const lfo = (rate, depth, target) => { const o = ac.createOscillator(), d = gainNode(depth); o.frequency.value = rate; o.connect(d); d.connect(target); o.start(); };
     if (name === "water") { const n = noiseSrc(true), f = filt("lowpass", 420); n.connect(f); f.connect(g); lfo(0.12, 120, f.frequency); }
-    else if (name === "wind") { const n = noiseSrc(false), f = filt("bandpass", 380, 0.6); n.connect(f); f.connect(g); lfo(0.07, 160, f.frequency); }
+    // Wind is a low rumble that swells and fades in gusts. (A steady white-noise band sounds like rain, so none of
+    // the dry-weather layers use one.)
+    else if (name === "wind") { const n = noiseSrc(true), f = filt("lowpass", 320), gg = gainNode(0.5); n.connect(f); f.connect(gg); gg.connect(g); lfo(0.06, 0.45, gg.gain); lfo(0.045, 120, f.frequency); }
     else if (name === "rain") {
       // Rain = a soft low roar (the whole shower) + a gentler patter band, not harsh static
       const n = noiseSrc(true), f = filt("lowpass", 900); n.connect(f); const fg = gainNode(0.9); f.connect(fg); fg.connect(g);
       const n2 = noiseSrc(false), b = filt("bandpass", 2600, 0.6), l = filt("lowpass", 5200), bg = gainNode(0.22); n2.connect(b); b.connect(l); l.connect(bg); bg.connect(g);
       lfo(0.09, 0.08, bg.gain);
     }
-    else if (name === "gusts") { const n = noiseSrc(true), f = filt("lowpass", 700); n.connect(f); const gg = gainNode(0.6); f.connect(gg); gg.connect(g); lfo(0.11, 0.45, gg.gain); lfo(0.05, 260, f.frequency); }
-    else if (name === "breeze") { const n = noiseSrc(false), f = filt("bandpass", 520, 0.4); n.connect(f); f.connect(g); lfo(0.06, 140, f.frequency); }
+    else if (name === "gusts") { const n = noiseSrc(true), f = filt("lowpass", 520); n.connect(f); const gg = gainNode(0.5); f.connect(gg); gg.connect(g); lfo(0.09, 0.48, gg.gain); lfo(0.05, 220, f.frequency); }
+    else if (name === "breeze") { const n = noiseSrc(true), f = filt("lowpass", 260), gg = gainNode(0.5); n.connect(f); f.connect(gg); gg.connect(g); lfo(0.05, 0.48, gg.gain); }
     else if (name === "cicada") {
       // A hot-afternoon insect buzz: a high noise band pulsing very fast, slowly swelling and fading
-      const n = noiseSrc(false), f = filt("bandpass", 5200, 7), am = gainNode(0.5); n.connect(f); f.connect(am); am.connect(g);
-      const o = ac.createOscillator(), d = gainNode(0.5); o.type = "square"; o.frequency.value = 42; o.connect(d); d.connect(am.gain); o.start(); lfo(0.07, 0.4, g.gain);
+      // (a high tone pulsed fast, not noise, so it never sounds like rain)
+      const c = ac.createOscillator(), am = gainNode(0.5); c.type = "triangle"; c.frequency.value = 4700; c.connect(am); am.connect(g); c.start(); lfo(6, 300, c.frequency);
+      const o = ac.createOscillator(), d = gainNode(0.5); o.type = "square"; o.frequency.value = 38; o.connect(d); d.connect(am.gain); o.start(); lfo(0.07, 0.4, g.gain);
     }
     else if (name === "motor") { const o = ac.createOscillator(), f = filt("lowpass", 520), og = gainNode(0.5); o.type = "sawtooth"; o.frequency.value = 72; o.connect(f); f.connect(og); og.connect(g); o.start(); lfo(3, 6, o.frequency); }
     else if (name === "fire") { const n = noiseSrc(true), f = filt("lowpass", 420); n.connect(f); f.connect(g); }
@@ -149,8 +152,10 @@
     else if (name === "roomtone") { const n = noiseSrc(true), f = filt("lowpass", 160); n.connect(f); f.connect(g); const o = ac.createOscillator(), og = gainNode(0.05); o.frequency.value = 60; o.connect(og); og.connect(g); o.start(); }
     else if (name === "city") { const n = noiseSrc(true), f = filt("bandpass", 260, 0.5); n.connect(f); f.connect(g); lfo(0.05, 60, f.frequency); }
     else if (name === "pump") { const o = ac.createOscillator(), f = filt("lowpass", 380), og = gainNode(0.5); o.type = "sawtooth"; o.frequency.value = 110; o.connect(f); f.connect(og); og.connect(g); o.start(); const n = noiseSrc(false), nf = filt("bandpass", 2600, 2); n.connect(nf); nf.connect(g); }
-    else if (name === "hiss") { const n = noiseSrc(false), f = filt("highpass", 3500); n.connect(f); f.connect(g); }
-    else if (name === "fan") { const n = noiseSrc(false), f = filt("bandpass", 650, 0.5); n.connect(f); f.connect(g); }
+    else if (name === "hiss") { const n = noiseSrc(false), f = filt("bandpass", 4200, 3); n.connect(f); f.connect(g); } // a narrow hiss, unlike rain's broad patter
+    // A fan: its motor's low hum plus soft moving air (low-passed, so it doesn't hiss like rain)
+    else if (name === "fan") { const o = ac.createOscillator(), f = filt("lowpass", 260), og = gainNode(0.35); o.type = "sawtooth"; o.frequency.value = 96; o.connect(f); f.connect(og); og.connect(g); o.start();
+      const n = noiseSrc(true), nf = filt("lowpass", 600), ng = gainNode(0.7); n.connect(nf); nf.connect(ng); ng.connect(g); lfo(8, 0.08, ng.gain); }
     else if (name === "heat") { const n = noiseSrc(true), f = filt("lowpass", 90); n.connect(f); f.connect(g); }
     else if (name === "buzzer") { const o = ac.createOscillator(), f = filt("lowpass", 3200); o.type = "square"; o.frequency.value = 2300; o.connect(f); f.connect(g); o.start(); }
     else if (name === "bubbles") { L.bubbles = true; }
@@ -158,7 +163,7 @@
     layers[name] = L;
     return L;
   }
-  const LEVELS = { water: 0.5, wind: 0.35, rain: 0.55, gusts: 0.5, breeze: 0.12, cicada: 0.05, roomtone: 0.5, city: 0.4, pump: 0.12, hiss: 0.05, fan: 0.14,
+  const LEVELS = { water: 0.4, wind: 0.3, rain: 0.55, gusts: 0.45, breeze: 0.16, cicada: 0.025, roomtone: 0.5, city: 0.4, pump: 0.12, hiss: 0.035, fan: 0.12,
     heat: 0.3, buzzer: 0.05, bubbles: 1, motor: 0.1, fire: 0.35, steam: 0.06, traffic: 0.35, market: 0.3, hum: 0.06, uv: 0.05 };
   const DEVICE = ["pump", "hiss", "fan", "heat", "bubbles", "buzzer", "motor", "fire", "steam", "hum", "uv"]; // these chirp on/off when they change
   const applied = {};
@@ -268,9 +273,10 @@
     const wx = scene.weather;
     if (wx) {
       const h = state.hour ?? 12;
+      // the weather owns the outdoor bed: a game's general "wind" layer is replaced by the weather's own
+      ambience.delete("wind");
       if (wx === "cloudy" || wx === "rainy") ambience.add("gusts"); else if (!scene.night) ambience.add("breeze");
       if (wx === "sunny" && !scene.night && h >= 10 && h < 16) ambience.add("cicada");
-      if (wx !== "sunny") ambience.delete("wind");
     }
     for (const n of ["water", "wind", "rain", "gusts", "breeze", "cicada", "roomtone", "city", "traffic", "market"]) setLayer(n, ambience.has(n));
     for (const [n, on] of Object.entries(state.devices || {})) setLayer(n, on);

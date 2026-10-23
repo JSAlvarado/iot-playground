@@ -163,6 +163,8 @@
     missions, scene,
     missionsIntro: "Each mission loads a batch of tomatoes and sets up the stall. Your rule cards do the work. Change rules any time, even mid-mission.",
     eventSounds: { uv: "zap", lid: "click" },
+    // Show the whole 182 s UV-C cycle in slow motion so the lamp, the shutter and the countdown can be seen
+    slowMotion: (sim) => !!(sim.state.lampOn && sim.state.lampLeft > 0),
     soundState: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour, open = h >= 5 && h < 19.5; return { ambience: [open ? "market" : "roomtone"], night: !open, devices: { fan: s.fanOn, uv: !!(s.lampOn && s.lampLeft > 0) } }; },
     status: (sim) => {
       const s = sim.state, m = TomatoModel.mood(s), f = Math.round(fresh(s));

@@ -175,6 +175,50 @@
     }
   };
 
+  // ---- The Evidence tab: what Curb-E sent to its website, newest first ----
+  const VERDICT = {
+    recorded: ["good", "Uploaded: clear record"], moved: ["good", "Warned: the driver moved on"],
+    unclear: ["warn", "Unclear photo: plate not sure enough"], brief: ["bad", "False alarm: only a brief stop"],
+    siren: ["bad", "False alarm: siren on a brief stop"], missed: ["bad", "Missed: parked and left with no record"]
+  };
+  const dom = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  function photo(r) { // a little camera snapshot: the car and its plate, darker at night, streaked in rain
+    const g = mk("svg", { viewBox: "0 0 120 72", class: "ev-photo", "aria-hidden": "true" });
+    mk("rect", { width: 120, height: 72, fill: r.night ? "#26303d" : "#9fb3c2" }, g);
+    mk("rect", { y: 48, width: 120, height: 24, fill: r.night ? "#2b2f33" : "#5b6168" }, g);
+    mk("rect", { x: 22, y: 30, width: 76, height: 24, rx: 7, fill: CAR_COLORS[r.color] }, g);
+    mk("path", { d: "M34 30 L44 18 H76 L86 30 Z", fill: CAR_COLORS[r.color] }, g);
+    mk("rect", { x: 44, y: 40, width: 32, height: 11, rx: 2, fill: "#ffffff", stroke: "#222", "stroke-width": 1 }, g);
+    const t = mk("text", { x: 60, y: 48.5, "text-anchor": "middle", "font-size": 7.5, "font-weight": 700, fill: "#111", "font-family": FONT }, g); t.textContent = r.plate;
+    for (const x of [30, 90]) mk("circle", { cx: x, cy: 55, r: 6, fill: "#1d2328" }, g);
+    if (r.rain) for (let i = 0; i < 9; i++) mk("path", { d: `M${8 + i * 13} ${4 + (i % 3) * 9} l-3 9`, stroke: "#dfe8f0", "stroke-width": 1.2 }, g);
+    return g;
+  }
+  function renderEvidence(sim, panel) {
+    const s = sim.state;
+    const list = s.evidence.slice().reverse();
+    const key = s.evidence.length + ":" + s.caught + ":" + s.missed + ":" + s.falseAlarms;
+    if (panel.dataset.key === key) return; // nothing new since the last redraw
+    panel.dataset.key = key;
+    const head = [dom("h2", null, "Evidence: Curb-E's website"),
+      dom("p", null, "Every record the sign sent over 4G, newest first, as the traffic office would review it. Caught = recorded, or warned and moved on. False alarms include unclear photos and flagged brief stops.")];
+    const tally = dom("div", "ev-tally");
+    for (const [cls, n, label] of [["good", s.caught, "caught"], ["bad", s.missed, "missed"], ["warn", s.falseAlarms, "false alarms"]]) {
+      const c = dom("div", "ev-count " + cls); c.append(dom("b", null, String(n)), dom("span", null, label)); tally.append(c);
+    }
+    const items = dom("ol", "ev-list");
+    if (!list.length) items.append(dom("li", "hint", "No records yet. Press play: when your rules send the siren or an upload, it appears here."));
+    for (const r of list) {
+      const [lv, text] = VERDICT[r.verdict] || ["warn", r.verdict];
+      const li = dom("li", "ev " + lv);
+      const info = dom("div", "ev-info");
+      info.append(dom("b", null, r.plate), dom("span", "ev-meta", `${IoT.clockText(r.minutes)} · stopped ${r.stopped} min${r.conf ? ` · plate read ${r.conf}%` : ""}`), dom("span", "ev-verdict", text));
+      li.append(photo(r), info);
+      items.append(li);
+    }
+    panel.replaceChildren(...head, tally, items);
+  }
+
   window.CurbeMissions = missions; // for the automated mission tests
 
   const LEVEL = { clear: "good", stopped: "good", warned: "warn", recorded: "good", low: "warn", warm: "warn", hot: "bad", off: "bad" };
@@ -187,6 +231,7 @@
     howTo: ["Cars stop at the red curb. Most stop for a minute or two. Some park, and that blocks the road.",
       "Curb-E's camera counts how long a car has been Stopped. Tap a gauge to learn more.",
       "The example rules sound the siren after 3 minutes, then upload a photo once the camera is more than 80% sure of the number plate.",
+      "Open the Evidence tab to see every photo Curb-E uploaded, like the traffic office's website: green is a good record, orange an unclear photo, red a false alarm or a missed car.",
       "Open Missions and press Play. Catch parked cars, but don't flag drivers who only stopped briefly!"],
     sensors: [
       { id: "stopped", label: "Stopped", short: "Stop", icon: "⏱️", unit: "min", decimals: 0, min: 0, max: 30, good: [0, 3], warn: [3, 10000],
@@ -213,7 +258,9 @@
     // The sky for the weather layer and its sounds: the chosen weather all day, darkness from dusk to dawn
     weather: (sim) => { const h = IoT.timeOfDay(sim.minutes).hour; return { sky: sim.state.weather, night: h < 5.75 || h > 18.25 }; },
     soundState: (sim) => { const s = sim.state, h = IoT.timeOfDay(sim.minutes).hour; return { ambience: ["traffic", "city"], night: h < 5.75 || h > 18.25, rain: s.weather === "rainy", devices: { fan: s.fanOn } }; },
-    status: (sim) => { const s = sim.state, m = CurbeModel.mood(s); return { level: LEVEL[m.id], text: `${m.text} · ✓${s.caught} ✗${s.missed} ⚠${s.falseAlarms}` }; },
+    status: (sim) => { const s = sim.state, m = CurbeModel.mood(s); return { level: LEVEL[m.id], text: `${m.text} · caught ${s.caught} · missed ${s.missed} · false alarms ${s.falseAlarms}` }; },
+    // The Evidence tab: Curb-E's website, where the traffic office checks every record the sign sent
+    extraTabs: [{ id: "evidence", label: "Evidence", after: "rules", render: renderEvidence }],
     rulesIntro: "This is how Curb-E's computer decides what to do. An IF rule on the siren or the upload starts it once, each time the condition becomes true. An IF rule on the fans keeps them on while it's true.",
     rulesTip: "Try changing the limit: IF Stopped is above 4 THEN Siren strobe START. Too low and you flag drivers who only paused (false alarms). Too high and parked cars drive off before you catch them. Keep the upload rule on Plate read, not on Stopped, so only clear photos are sent. For hot days: IF Box temp is above 45 THEN Cooling fans ON UNTIL 40.",
     codeIntro: "Your rule cards written as an Arduino-style sketch. Curb-E's real computer is a Raspberry Pi 5, which would usually run this logic in Python next to the YOLO and OCR code, but the decisions are the same. The read...() functions stand in for the AI and sensor code, and the pin numbers are Raspberry Pi GPIO pins.",

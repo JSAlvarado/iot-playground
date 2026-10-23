@@ -7,7 +7,9 @@
 // Optional game fields: accent: [color, softColor], music: { bpm, wave, chords, scale } (see sound.js),
 // weather(sim) → { sky: "sunny" | "cloudy" | "rainy", night, rain: 0–1 } for the weather layer and its sounds,
 // sensors[].icon (an emoji shown on the gauge), howTo: [3–4 short steps], credit: { text, url? } and
-// ruleIfEvents: [event ids an IF rule may start, like a UV cycle].
+// ruleIfEvents: [event ids an IF rule may start, like a UV cycle], slowMotion(sim) → true to slow time down while
+// something short is happening, extraTabs: [{ id, label, after: "rules", render(sim, panel) }] for a game's own
+// tab (redrawn about once a second while it's open).
 (function (root) {
   "use strict";
   const { IoT } = root;
@@ -141,7 +143,9 @@
 
     // ---- Tabs ----
     const TABS = [["rules", "Rules"], ["missions", "Missions"], ["graph", "Graph"], ["code", "Code"], ["learn", "Learn"], ["world", "World"]];
-    const tabBar = el("div", { class: "tabs", role: "tablist" });
+    for (const x of game.extraTabs || []) TABS.splice(TABS.findIndex(([id]) => id === (x.after || "rules")) + 1, 0, [x.id, x.label]);
+    const extra = Object.fromEntries((game.extraTabs || []).map((x) => [x.id, x]));
+    const tabBar = el("div", { class: "tabs", role: "tablist", "data-n": String(TABS.length) });
     const panels = {};
     for (const [id, label] of TABS) {
       tabBar.append(el("button", { type: "button", role: "tab", id: "tab-" + id, "aria-controls": "panel-" + id, "aria-selected": String(id === tab), text: label,
@@ -156,6 +160,7 @@
       panels[id].scrollTop = 0;
       if (id === "code") renderCode();
       if (id === "graph") renderGraph();
+      if (extra[id]) extra[id].render(sim, panels[id]);
     }
 
     // Rules
@@ -311,7 +316,11 @@
     function frame(t) {
       const dt = Math.min(0.25, (t - last) / 1000);
       last = t;
-      carry += speed.rate * dt;
+      // A game can ask for slow motion while something short happens (a 3-minute UV-C cycle would otherwise
+      // flash past in a tenth of a second): then time runs at most 1 virtual minute per real second
+      const slow = !!(speed.rate && game.slowMotion && game.slowMotion(sim));
+      sceneClock.dataset.slow = String(slow);
+      carry += (slow ? Math.min(speed.rate, 1) : speed.rate) * dt;
       let n = Math.floor(carry);
       carry -= n;
       const heard = new Set();
@@ -328,6 +337,7 @@
       if (wx) wx.draw(game.weather ? game.weather(sim) : null, t, speed.rate);
       if (t - lastUi > 200) { updateUi(); lastUi = t; }
       if (tab === "graph" && t - lastGraph > 1000) { renderGraph(); lastGraph = t; }
+      if (extra[tab] && t - lastGraph > 1000) { extra[tab].render(sim, panels[tab]); lastGraph = t; }
       requestAnimationFrame(frame);
     }
     function finishMission(r) {
@@ -378,7 +388,7 @@
     if (!seenHelp) setTimeout(openHelp, 400);
     // refresh() redraws the scene and the readings at once (the animation loop normally does this)
     return { get sim() { return sim; }, rules, startMission, showTab, setSpeed: (id) => setSpeed(SPEEDS.find((s) => s.id === id)),
-      refresh(t = performance.now()) { game.scene.draw(sim, t); if (wx) wx.draw(game.weather ? game.weather(sim) : null, t, speed.rate); updateUi(); if (tab === "graph") renderGraph(); } };
+      refresh(t = performance.now()) { game.scene.draw(sim, t); if (wx) wx.draw(game.weather ? game.weather(sim) : null, t, speed.rate); updateUi(); if (tab === "graph") renderGraph(); if (extra[tab]) extra[tab].render(sim, panels[tab]); } };
   }
 
   root.IoTUI = { start, level };

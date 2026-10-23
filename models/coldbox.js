@@ -157,7 +157,7 @@
     };
   }
   coldboxModel.missions = [
-    { id: "market-day", title: "1. Market day", goal: "A sunny day at the market. The fish arrive at 12 °C. Cool them to 4 °C by 08:00 and keep them cold until the market closes at 18:00. The example rules already work.",
+    { id: "market-day", title: "1. Market day", goal: "A sunny day at the market. The fish arrive at 12 °C. Cool them to 4 °C by 08:00 and keep them cold until the market closes at 18:00. The example rules already work; better rules earn more stars.",
       options: { weather: "sunny", airHigh: 33, battery: 80 }, check: marketDay(12) },
     { id: "hot-side", title: "2. Hot side, cold side", goal: "A heat wave: 37 °C in the afternoon. A Peltier module pushes heat into its hot side, so the heatsink fans must carry it away. Keep the fish cold for 12 hours without letting the hot side reach 70 °C.",
       options: { weather: "sunny", airHigh: 37, battery: 80 }, check: marketDay(12) },

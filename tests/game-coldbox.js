@@ -53,6 +53,9 @@
     check(`Cold Cart mission "${m.title}" is won with sensible rules`, won.state === "won", won.message);
     check(`Cold Cart mission "${m.title}" is lost with careless rules`, lost.state === "lost", lost.message);
   }
-  const m1 = play(missions[0], JSON.parse(JSON.stringify([pel, fan])));
+  const examples = [pel, { kind: "if", sensor: "sink", op: ">", value: 55, actuator: "fans" }]; // games/coldbox.js defaultRules
+  const m1 = play(missions[0], JSON.parse(JSON.stringify(examples)));
   check("Cold Cart: mission 1 is won with the example rules", m1.state === "won", m1.message);
+  check("Cold Cart: missions 2–4 need better rules than the examples",
+    [1, 2, 3].every((i) => play(missions[i], JSON.parse(JSON.stringify(examples))).state === "lost"));
 })(typeof window !== "undefined" ? window : globalThis);

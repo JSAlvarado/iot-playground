@@ -83,7 +83,8 @@
         down: null,                  // null, "power" or "heat": Curb-E is off
         vehicle: null, count: 0, last: null,
         caught: 0, missed: 0, falseAlarms: 0, unclear: 0, violators: 0, records: 0,
-        sirens: 0, uploads: 0, heatStops: 0, powerOuts: 0
+        sirens: 0, uploads: 0, heatStops: 0, powerOuts: 0,
+        evidence: []                 // what the sign sent and missed, newest last (the Evidence tab shows it)
       };
     },
     readings(s) {
@@ -114,6 +115,9 @@
 
       // Actions: the siren warns the driver, the upload sends the evidence over 4G. Neither works while Curb-E is off.
       const cur = s.vehicle;
+      // One line on the evidence website: the photo's car, plate, time, how long it stopped, the plate read and the verdict
+      const file = (veh, verdict, conf) => { s.evidence.push({ plate: veh ? veh.plate : "—", color: veh ? veh.color : 0, minutes: ctx.minutes, stopped: veh ? veh.t : 0,
+        conf: Math.round(conf || 0), verdict, night: isNight(hour), rain: s.weather === "rainy" }); if (s.evidence.length > 40) s.evidence.shift(); };
       const falseAlarm = (veh, why) => { if (veh && veh.falseCounted) return; if (veh) veh.falseCounted = true; s.falseAlarms += 1; ctx.note(why); };
       for (const e of ctx.events) {
         if (s.down) { ctx.note("Curb-E is off, so nothing happened"); continue; }
@@ -122,7 +126,7 @@
           if (!cur) { falseAlarm(null, "False alarm: the siren sounded at an empty curb"); continue; }
           if (cur.warned) continue;
           cur.warned = true; cur.warnT = cur.t;
-          if (cur.kind === "brief") { falseAlarm(cur, `False alarm: ${cur.plate} only stopped briefly`); continue; }
+          if (cur.kind === "brief") { file(cur, "siren", 0); falseAlarm(cur, `False alarm: ${cur.plate} only stopped briefly`); continue; }
           ctx.note(`Siren 10 s: ${cur.plate} warned after ${cur.t} min`);
           if (rand(s) < 0.35) cur.dwell = Math.min(cur.dwell, cur.t + between(s, 1, 2)); // some drivers move on at once
         } else if (e === "upload") {
@@ -131,9 +135,9 @@
           s.uploads += 1; s.battery = Math.max(0, s.battery - 0.1);
           // Without a warning first, the camera only has one quick, zoomed-out frame
           const conf = cur.warned ? cur.conf : 0.6 * (plateCeiling(hour, s.weather) + cur.quality);
-          if (cur.kind === "brief") { falseAlarm(cur, `False alarm: evidence sent for ${cur.plate}, a brief stop`); continue; }
-          if (conf < LIMITS.clearRead) { cur.unclear = true; s.unclear += 1; falseAlarm(cur, `Unclear photo: plate read only ${Math.round(conf)}%, it might name the wrong car`); continue; }
-          cur.recorded = true; s.records += 1;
+          if (cur.kind === "brief") { file(cur, "brief", conf); falseAlarm(cur, `False alarm: evidence sent for ${cur.plate}, a brief stop`); continue; }
+          if (conf < LIMITS.clearRead) { file(cur, "unclear", conf); cur.unclear = true; s.unclear += 1; falseAlarm(cur, `Unclear photo: plate read only ${Math.round(conf)}%, it might name the wrong car`); continue; }
+          cur.recorded = true; s.records += 1; file(cur, "recorded", conf);
           ctx.note(`Evidence uploaded over 4G: ${cur.plate}, plate read ${Math.round(conf)}%`);
         }
       }
@@ -147,7 +151,7 @@
           if (v.kind === "park") {
             s.violators += 1;
             const ok = v.recorded || (v.warned && v.t - v.warnT <= LIMITS.warnedLeave + 1);
-            if (ok) s.caught += 1; else { s.missed += 1; ctx.note(`Missed: ${v.plate} parked ${v.dwell} min and left without a clear record`); }
+            if (ok) { s.caught += 1; if (!v.recorded) file(v, "moved", 0); } else { s.missed += 1; file(v, "missed", 0); ctx.note(`Missed: ${v.plate} parked ${v.dwell} min and left without a clear record`); }
           }
           s.last = v; s.vehicle = null;
         }
